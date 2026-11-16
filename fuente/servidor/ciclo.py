@@ -157,6 +157,11 @@ class BotFuturos:
     def revisar_abiertas(self) -> None:
         posiciones = self.cuenta.api.posiciones() if self.modo == "demo" else None
         for op in self.abiertas():
+            pos = (posiciones or {}).get(op["sym"])
+            if pos and not (op["p_in"] > 0):   # entrada sin precio confirmado: se toma el de Binance
+                op["p_in"], op["cant"] = float(pos["entryPrice"]), abs(float(pos["positionAmt"]))
+                self.db.actualizar(op["id"], p_in=op["p_in"], cant=op["cant"])
+                self.db.evento(f"Corregí la entrada de {op['sym'][:-4]} con el precio de Binance: {precio_txt(op['p_in'])}.", "aviso")
             pagado = self.cuenta.financiacion(op, self.ahora)
             if pagado:
                 op["financiacion"] += pagado

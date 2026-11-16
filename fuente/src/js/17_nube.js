@@ -1,0 +1,137 @@
+/* Guardado en la nube: los datos de la persona (marcador de señales, simulador) se guardan en una nota PRIVADA (gist secreto)
+   de su propia cuenta de GitHub, asi se ven iguales en el PC y en el celular y no se pierden si el navegador se borra.
+   La llave (token de GitHub, solo con permiso de «Gists») queda en cada dispositivo; nunca se publica ni sale de ahi. */
+App.nube = {
+  API: "https://api.github.com", ARCHIVO: "terrainvest.json", DESC: "TerraInvest · datos (privado)",
+  CLAVES: ["senales", "futuros"],
+  estado: "apagada", error: null, ultimo: 0, subiendo: null, firmaSubida: "",
+  get token() { return App.store.get("nube_token", ""); },
+  get gist() { return App.store.get("nube_gist", ""); },
+
+  async pedir(metodo, ruta, cuerpo) {
+    const r = await fetch(this.API + ruta, { method: metodo, cache: "no-store",
+      headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json", ...(cuerpo ? { "Content-Type": "application/json" } : {}) },
+      body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+    if (r.status === 401) throw new Error("La llave de GitHub no sirve o venció");
+    if (r.status === 403 || r.status === 404) throw new Error("La llave no tiene permiso de Gists");
+    if (!r.ok) throw new Error("GitHub respondió " + r.status);
+    return r.json();
+  },
+
+  local() { const d = {}; this.CLAVES.forEach(k => { d[k] = App.store.get(k, null); }); return d; },
+
+  /* Une lo de este dispositivo con lo de la nube sin perder nada:
+     - señales: union por id; si las dos tienen la misma, gana la que tiene mas informacion anotada
+     - saldo, ajustes y simulador: gana el mas reciente */
+  unir(a, b) {
+    if (!a) return b; if (!b) return a;
+    const out = {};
+    const senA = a.senales, senB = b.senales;
+    if (senA || senB) {
+      const hecho = s => s.modU || 0;   // el saldo y los ajustes los decide el ultimo cambio hecho a mano
+      const base = !senA ? senB : !senB ? senA : (hecho(senA) !== hecho(senB) ? (hecho(senA) > hecho(senB) ? senA : senB) : ((senA.mod || 0) >= (senB.mod || 0) ? senA : senB));
+      const borrado = Math.max((senA && senA.borrado) || 0, (senB && senB.borrado) || 0);
+      const peso = s => (s.plataforma ? 8 : 0) + (s.estado === "entro" ? 4 : 0) + (s.estado === "paso" ? 2 : 0) + (s.binance ? 1 : 0);
+      const todas = new Map();
+      [...((senA && senA.senales) || []), ...((senB && senB.senales) || [])].forEach(s => { const y = todas.get(s.id); if (!y || peso(s) > peso(y)) todas.set(s.id, s); });
+      out.senales = { ...base, borrado, senales: [...todas.values()].filter(s => s.t0 > borrado).sort((x, y) => x.t0 - y.t0).slice(-5000) };
+    }
+    const fa = a.futuros, fb = b.futuros;
+    out.futuros = !fa ? fb : !fb ? fa : ((fa.mod || 0) >= (fb.mod || 0) ? fa : fb);
+    return out;
+  },
+
+  aplicar(d) {   // pone los datos unidos en la pagina y en este dispositivo
+    if (d.senales) { App.store.set("senales", d.senales, true); App.senales.S = Object.assign(App.senales.S, d.senales); }
+    if (d.futuros) { App.store.set("futuros", d.futuros, true); App.futuros.S = Object.assign({ saldo: 1000, inicial: 1000, abiertas: [], cerradas: [] }, d.futuros); }
+  },
+
+  async buscarGist() {
+    if (this.gist) return this.gist;
+    const lista = await this.pedir("GET", "/gists?per_page=100");
+    let g = lista.find(x => x.description === this.DESC && x.files && x.files[this.ARCHIVO]);
+    if (!g) g = await this.pedir("POST", "/gists", { description: this.DESC, public: false, files: { [this.ARCHIVO]: { content: JSON.stringify({ v: 1, ...this.local() }) } } });
+    App.store.set("nube_gist", g.id);
+    return g.id;
+  },
+
+  async bajar() {
+    if (!this.token) return;
+    try {
+      const id = await this.buscarGist(), g = await this.pedir("GET", "/gists/" + id), f = g.files[this.ARCHIVO];
+      let remoto = null;
+      if (f) remoto = JSON.parse(f.truncated ? await (await fetch(f.raw_url)).text() : f.content);
+      const unido = this.unir(this.local(), remoto);
+      this.aplicar(unido);
+      this.estado = "ok"; this.error = null; this.ultimo = Date.now();
+      if (JSON.stringify(unido) !== JSON.stringify({ senales: remoto && remoto.senales, futuros: remoto && remoto.futuros })) this.programar(500);
+    } catch (e) { this.estado = "error"; this.error = e.message; }
+    App.pintarTodo(); this.pintar();
+  },
+
+  async subir() {
+    if (!this.token) return;
+    const datos = { v: 1, ...this.local() }, firma = JSON.stringify(datos);
+    if (firma === this.firmaSubida) return;
+    try {
+      const id = await this.buscarGist();
+      await this.pedir("PATCH", "/gists/" + id, { files: { [this.ARCHIVO]: { content: firma } } });
+      this.firmaSubida = firma; this.estado = "ok"; this.error = null; this.ultimo = Date.now();
+    } catch (e) { this.estado = "error"; this.error = e.message; }
+    this.pintar();
+  },
+
+  programar(ms) { clearTimeout(this.subiendo); this.subiendo = setTimeout(() => this.subir(), ms == null ? 2500 : ms); },
+  cambio(k) { if (this.token && this.CLAVES.includes(k)) this.programar(); },
+
+  async conectar(token) {
+    App.store.set("nube_token", token.trim()); App.store.set("nube_gist", "");
+    this.estado = "conectando"; this.pintar();
+    await this.bajar();
+    if (this.estado === "ok") App.toast("Conectado: tus datos se guardan en tu GitHub");
+  },
+  desconectar() { App.store.set("nube_token", ""); App.store.set("nube_gist", ""); this.estado = "apagada"; this.pintar(); },
+
+  enlace() { return location.origin.startsWith("http") ? `${location.origin}${location.pathname}#nube=${encodeURIComponent(this.token)}` : `https://juanjosema2020.github.io/Invest_Platform_TerraInvest/#nube=${encodeURIComponent(this.token)}`; },
+  leerEnlace() {   // el celular se conecta escaneando el QR del PC: la llave viene en el enlace y se borra de la barra en el acto
+    const m = location.hash.match(/nube=([^&]+)/);
+    if (!m) return false;
+    history.replaceState(null, "", location.pathname + "#/inicio");
+    this.conectar(decodeURIComponent(m[1]));
+    return true;
+  },
+
+  chip() {
+    if (!this.token) return '<button class="chip warn" data-nube><i></i>Tus datos solo en este dispositivo · guardar en la nube</button>';
+    if (this.estado === "error") return `<button class="chip bad" data-nube><i></i>Nube: ${App.esc(this.error)}</button>`;
+    if (this.estado !== "ok") return '<button class="chip" data-nube><i></i>Conectando con la nube…</button>';
+    return `<button class="chip ok" data-nube><i></i>Guardado en la nube · ${App.fmt.hace(this.ultimo)}</button>`;
+  },
+  pintar() { App.html(document.getElementById("nube"), this.chip()); if (this.abierta) this.ventana(); },
+
+  ventana() {
+    this.abierta = true;
+    let v = document.getElementById("nube-v");
+    if (!v) { v = document.createElement("div"); v.id = "nube-v"; v.className = "modal"; document.body.appendChild(v); v.addEventListener("click", e => this.clic(e)); }
+    const con = !!this.token;
+    v.innerHTML = `<div class="card dlg"><div class="row between"><h3>Guardar tus datos en la nube</h3><button class="btn sm ghost" data-x>Cerrar</button></div>
+      <p class="sub" style="margin-top:6px">El marcador de señales y el simulador se guardan en una nota <b>privada</b> de tu cuenta de GitHub. Así ves lo mismo en el PC y en el celular, y no se pierde nada si el navegador se borra. Lo de los bots no necesita esto: siempre viene del servidor.</p>
+      ${con ? `<div class="note ${this.estado === "error" ? "bad" : "good"} small" style="margin-top:12px">${this.estado === "error" ? App.esc(this.error) : "Conectado. Última sincronización " + App.fmt.hace(this.ultimo) + "."}</div>
+        <h3 style="margin-top:18px">Conectar el celular</h3><p class="small mute">Escanea este código con la cámara del celular. Abre la página ya conectada (usa el navegador normal, no el de Telegram o WhatsApp).</p>
+        <div class="row" style="margin-top:10px;align-items:flex-start"><div id="nube-qr" class="qr"></div><p class="tiny faint" style="max-width:260px">El código lleva tu llave de GitHub: no le tomes foto ni lo compartas. Solo sirve para leer y escribir tus notas privadas.</p></div>
+        <div class="row" style="margin-top:14px"><button class="btn sm" data-sync>Sincronizar ahora</button><button class="btn sm ghost" data-off>Desconectar este dispositivo</button></div>`
+      : `<ol class="steps" style="margin-top:14px">
+          <li><div>Entra a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com › Settings › Developer settings › Fine-grained tokens › Generate new token</a>.</div></li>
+          <li><div>Nombre: <b>TerraInvest datos</b>. Vencimiento: el más largo que te deje. En <b>Permissions › Account</b>, busca <b>Gists</b> y elige <b>Read and write</b>. Nada más.</div></li>
+          <li><div>Pulsa <b>Generate token</b>, copia la llave y pégala aquí (solo en esta página, nunca en un chat).</div></li></ol>
+        <div class="row" style="margin-top:14px"><label class="field grow">Llave de GitHub<input id="nube-tok" type="password" autocomplete="off" placeholder="github_pat_…" style="width:100%"></label><button class="btn pri" data-on style="align-self:flex-end">Conectar</button></div>`}</div>`;
+    if (con && window.qrcode) { const q = qrcode(0, "M"); q.addData(this.enlace()); q.make(); document.getElementById("nube-qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); }
+  },
+  clic(e) {
+    const t = e.target;
+    if (t.id === "nube-v" || t.closest("[data-x]")) { this.abierta = false; document.getElementById("nube-v").remove(); return; }
+    if (t.closest("[data-on]")) { const v = document.getElementById("nube-tok").value; if (v.trim().length > 20) this.conectar(v); else App.toast("Esa llave parece incompleta"); }
+    if (t.closest("[data-off]")) this.desconectar();
+    if (t.closest("[data-sync]")) this.bajar();
+  },
+};

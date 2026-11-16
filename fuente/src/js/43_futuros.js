@@ -205,7 +205,7 @@ App.registrar({
       App.html($("#fb-radar"), R.monedas.map(m => {
         const vivo = F.marcas[m.sym] || m.precio, abierta = B.abiertas.find(o => o.sym === m.sym);
         const entra = btc.alcista ? m.max_entrada : m.min_entrada, sale = abierta ? (abierta.lado > 0 ? m.min_salida : m.max_salida) : (btc.alcista ? m.min_salida : m.max_salida);
-        const tag = abierta ? (abierta.lado > 0 ? '<span class="tag up">Dentro: largo</span>' : '<span class="tag down">Dentro: corto</span>') : m.objetivo ? '<span class="tag info">Señal: entra</span>' : '<span class="tag wait">Espera</span>';
+        const tag = abierta ? (abierta.lado > 0 ? '<span class="tag up">Dentro: largo</span>' : '<span class="tag down">Dentro: corto</span>') : m.objetivo ? '<span class="tag info" title="La regla dice entrar, pero no abrió (por ejemplo, no alcanza el monto mínimo de Binance). Ver la bitácora.">Señal sin abrir</span>' : '<span class="tag wait">Espera</span>';
         return `<tr><td>${App.coin(m.sym.slice(0, -4))}</td><td class="num">${f.precio(vivo)}</td><td>${tag}</td>
           <td class="num">${abierta ? '<span class="faint">—</span>' : `${f.precio(entra)} <span class="faint">${f.pct(entra / vivo - 1, 1)}</span>`}</td>
           <td class="num">${f.precio(sale)} <span class="faint">${f.pct(sale / vivo - 1, 1)}</span></td></tr>`;

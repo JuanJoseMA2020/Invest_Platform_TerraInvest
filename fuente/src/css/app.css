@@ -101,7 +101,7 @@ section>h2:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,v
 .seg button,.tabs button{border:0;background:none;padding:7px 13px;border-radius:9px;color:var(--mute);cursor:pointer;font-weight:600;transition:.15s}
 .seg button:hover,.tabs button:hover{color:var(--text)}
 .seg button.on,.tabs button.on{background:var(--surface3);color:var(--text);box-shadow:0 0 0 1px var(--line2),0 4px 14px -6px rgba(0,0,0,.6)}
-.tabs{margin-bottom:18px}
+.tabs{margin-bottom:18px} .tabs button{display:inline-flex;align-items:center;gap:7px} .tabs button svg{width:16px;height:16px;flex:none}
 .table{width:100%;border-collapse:collapse;font-size:13.5px}
 .table th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:650;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 .table td{padding:10px 10px;border-bottom:1px solid rgba(29,38,56,.7);white-space:nowrap;vertical-align:middle}
@@ -149,6 +149,10 @@ details.more[open] summary{margin-bottom:8px}
 ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mute)} .legend span{display:inline-flex;align-items:center;gap:6px} .legend i{width:12px;height:3px;border-radius:2px}
 .disclaimer{font-size:11.5px;color:var(--faint);margin-top:34px;padding-top:14px;border-top:1px solid var(--line);line-height:1.6}
+button.chip{cursor:pointer;font:inherit;font-size:12px} button.chip:hover{border-color:var(--accent);color:var(--text)}
+.modal{position:fixed;inset:0;z-index:70;background:rgba(3,6,12,.72);backdrop-filter:blur(6px);display:grid;place-items:center;padding:16px;animation:fade .2s}
+.dlg{width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--surface)}
+.qr{width:190px;height:190px;background:#fff;border-radius:12px;padding:6px;flex:none} .qr svg{width:100%;height:100%;display:block}
 @keyframes pulse{50%{opacity:.5}} @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.985)}}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}} @keyframes sk{to{background-position:-200% 0}}
 .banner.signal{animation:pop .35s ease-out}
@@ -156,13 +160,13 @@ ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 /* ============================================================ movil */
 @media (max-width:1100px){ .g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:900px){
-  .app{grid-template-columns:1fr}
+  .app{grid-template-columns:minmax(0,1fr)} .wrapmain{width:100vw;overflow-x:hidden}
   .side{position:fixed;inset:auto 0 0 0;height:auto;flex-direction:row;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--line);justify-content:space-around;gap:2px}
   .brand,.side .foot,.navt{display:none}
-  .nav{flex-direction:column;gap:3px;font-size:10.5px;padding:7px 2px;justify-content:center;text-align:center}
+  .nav{flex:1 1 0;min-width:0;flex-direction:column;gap:3px;font-size:10px;padding:7px 1px;justify-content:center;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nav.on:before{display:none} .nav .pill{display:none}
   .nav .badge{position:absolute;top:2px;right:8px;margin:0}
-  .topbar{padding:8px 14px} .topbar .clock{display:none}
+  .topbar{padding:8px 14px} .topbar .clock{display:none} #nube .chip{max-width:44vw;overflow:hidden;text-overflow:ellipsis;display:block}
   .main{padding:18px 14px 110px}
   .g2,.g3,.split,.split2{grid-template-columns:minmax(0,1fr)}
   .field input,.field select{width:100%} .field{flex:1;min-width:110px}

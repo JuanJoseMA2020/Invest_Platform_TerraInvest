@@ -4,7 +4,11 @@ const App = { modulos: [], activo: null, datos: DATOS };
 App.store = {
   pre: "plataforma_v1:",
   get(k, def) { try { const v = localStorage.getItem(this.pre + k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
-  set(k, v) { try { localStorage.setItem(this.pre + k, JSON.stringify(v)); } catch (e) { /* modo privado: sigue en memoria */ } },
+  set(k, v, silencioso) {
+    if (!silencioso && v && typeof v === "object" && (k === "senales" || k === "futuros")) v.mod = Date.now();   // para unir PC y celular
+    try { localStorage.setItem(this.pre + k, JSON.stringify(v)); } catch (e) { /* modo privado: sigue en memoria */ }
+    if (!silencioso && App.nube) App.nube.cambio(k);
+  },
 };
 
 App.fmt = {

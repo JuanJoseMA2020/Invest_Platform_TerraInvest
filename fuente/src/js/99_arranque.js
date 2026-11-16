@@ -25,6 +25,12 @@ App.bandera = () => {   // aviso global: una señal activa se ve desde cualquier
   document.getElementById("bandera").addEventListener("click", () => App.ir("senales"));
   document.getElementById("vistas").innerHTML = App.modulos.map(m => `<div class="vista" data-id="${m.id}" hidden></div>`).join("");
   App.senales.autoprueba();
+  document.addEventListener("click", e => { if (e.target.closest("[data-nube]")) App.nube.ventana(); });
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* el navegador decide */ }
+  if (!App.nube.leerEnlace()) App.nube.bajar();
+  App.nube.pintar();
+  setInterval(() => { if (App.nube.token && document.visibilityState === "visible") App.nube.bajar(); }, 90000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && App.nube.token) App.nube.bajar(); else if (App.nube.token) App.nube.subir(); });
   window.addEventListener("hashchange", () => App.ir(location.hash.replace("#/", "")));
   App.ir(location.hash.replace("#/", "") || "inicio");
   App.ticker.reloj();

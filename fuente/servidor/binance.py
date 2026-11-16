@@ -98,7 +98,9 @@ class Demo(Publico):
 
     # ---- preparacion
     def un_sentido(self) -> None:
-        """Modo de posicion de un solo sentido (lo normal). Si ya esta asi, Binance responde error -4059: se ignora."""
+        """Modo de posicion de un solo sentido (lo normal). Solo se cambia si la cuenta esta en modo de dos sentidos."""
+        if not self.firmado("GET", "/fapi/v1/positionSide/dual").get("dualSidePosition"):
+            return
         try:
             self.firmado("POST", "/fapi/v1/positionSide/dual", dualSidePosition=False)
         except ErrorBinance as e:
@@ -117,6 +119,9 @@ class Demo(Publico):
     def mercado(self, sym: str, lado_orden: str, cantidad: str, reducir: bool = False) -> dict:
         return self.firmado("POST", "/fapi/v1/order", symbol=sym, side=lado_orden, type="MARKET", quantity=cantidad,
                             reduceOnly=True if reducir else None, newOrderRespType="RESULT")
+
+    def orden(self, sym: str, orden_id) -> dict:
+        return self.firmado("GET", "/fapi/v1/order", symbol=sym, orderId=orden_id)
 
     def poner_stop(self, sym: str, lado_orden: str, precio: str) -> dict:
         """Stop a mercado que cierra toda la posicion, disparado por el precio de marca. Binance movio estas ordenes al

@@ -60,6 +60,7 @@ App.senales = {
       s.neto = val === "gano" ? s.monto * this.S.pago / 100 : (val === "perdio" ? -s.monto : 0);
       this.S.saldo = Math.round((this.S.saldo + s.neto) * 100) / 100;
     }
+    this.S.modU = Date.now();   // cambio hecho por la persona: manda al unir PC y celular
     this.guardar(); App.pintarTodo();
   },
 
@@ -129,7 +130,7 @@ App.registrar({
         <p class="mute">Con pago de ${Math.round(100 * M.pago)} % se necesita más de ${App.fmt.pct(1 / (1 + M.pago), 1, false)}. La ventaja es pequeña y se midió con precios de Binance; la plataforma usa los suyos. Úsalo solo en demo hasta que el marcador diga «A favor». Modelo con datos hasta ${M.activos[Object.keys(M.activos)[0]].entrenado_hasta} UTC.</p></div></div></section>`;
     this.g = App.grafico(App.$("#s-chart", el)); this.sel = Object.keys(M.activos)[0];
     const chip = App.$("#s-test", el); chip.className = "chip " + (N.pruebaOK ? "ok" : "bad"); chip.innerHTML = `<i></i>${N.pruebaOK ? "Autoprueba correcta" : "Autoprueba fallida: sin señales"}`;
-    for (const [id, k] of [["#s-saldo", "saldo"], ["#s-pct", "pct"], ["#s-pago", "pago"]]) App.$(id, el).addEventListener("input", e => { const x = +e.target.value; if (isFinite(x) && x > 0) { S[k] = x; N.guardar(); this.pintar(); } });
+    for (const [id, k] of [["#s-saldo", "saldo"], ["#s-pct", "pct"], ["#s-pago", "pago"]]) App.$(id, el).addEventListener("input", e => { const x = +e.target.value; if (isFinite(x) && x > 0) { S[k] = x; S.modU = Date.now(); N.guardar(); this.pintar(); } });
     App.$("#s-son", el).onclick = e => { App.sonido.activar(); e.target.textContent = "Sonido activado"; };
     App.$("#s-chk", el).addEventListener("input", e => { N.escrito[e.target.dataset.n] = +e.target.value; this.pintar(); });
     App.$("#s-seg", el).onclick = e => { const b = e.target.closest("button"); if (!b) return; this.sel = b.dataset.n; el.querySelectorAll("#s-seg button").forEach(x => x.classList.toggle("on", x === b)); this.pintar(); };
@@ -139,7 +140,7 @@ App.registrar({
       const txt = [cols.join(",")].concat(S.senales.map(s => cols.map(c => c === "t0" || c === "exp" ? new Date(s[c]).toISOString() : (s[c] ?? "")).join(","))).join("\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "text/csv" })); a.download = "historial_senales.csv"; a.click();
     };
-    App.$("#s-reset", el).onclick = () => { if (confirm("¿Borrar todo el historial y el marcador? No se puede deshacer.")) { S.senales = []; N.guardar(); this.pintar(); } };
+    App.$("#s-reset", el).onclick = () => { if (confirm("¿Borrar todo el historial y el marcador? No se puede deshacer.")) { S.senales = []; S.borrado = S.modU = Date.now(); N.guardar(); this.pintar(); } };
     this.pintar();
   },
   pintar() {

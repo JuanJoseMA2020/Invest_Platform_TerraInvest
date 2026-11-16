@@ -85,7 +85,7 @@ def armar(d: dict) -> str:
     html = (SRC / "index.html").read_text(encoding="utf-8")
     css = "\n".join(p.read_text(encoding="utf-8") for p in sorted((SRC / "css").glob("*.css")))
     js = "\n".join(f"// ===== {p.name}\n" + p.read_text(encoding="utf-8") for p in sorted((SRC / "js").glob("*.js")))
-    vendor = (HERE / "vendor" / "lightweight-charts.js").read_text(encoding="utf-8")
+    vendor = "\n;\n".join(p.read_text(encoding="utf-8") for p in sorted((HERE / "vendor").glob("*.js")))   # graficos y codigos QR
     blob = json.dumps(d, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
     for mark, text in (("/*__CSS__*/", css), ("/*__VENDOR__*/", vendor), ("/*__DATOS__*/null", blob), ("/*__JS__*/", js)):
         assert html.count(mark) == 1, mark

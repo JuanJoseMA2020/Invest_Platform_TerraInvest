@@ -87,7 +87,7 @@ App.registrar({
     if (fut && fut.curva) App.spark($("#i-futuros-sp"), App.sparkDatos(fut.curva.slice(-200)), "#8b5cf6");
     const op = App.rendimientos.mejor(); if (op && op.serie && op.serie.length > 1) App.spark($("#i-rendimientos-sp"), op.serie.map(([m, v], i) => ({ time: Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1, 1) / 1000, value: 100 * v })), "#2dd4bf");
     // novedades
-    const feed = [...((fut && fut.eventos) || []).map(e => ({ ...e, texto: "Futuros · " + e.texto })), ...((bot && bot.eventos) || []).map(e => ({ ...e, nivel: "bot", texto: "Trading · " + e.texto }))]
+    const feed = [...((fut && fut.eventos) || []).map(e => ({ ...e, texto: "Futuros · " + e.texto.split(String.fromCharCode(10))[0] })), ...((bot && bot.eventos) || []).map(e => ({ ...e, nivel: "bot", texto: "Trading · " + e.texto }))]
       .sort((a, b) => b.t - a.t).slice(0, 8);
     App.html($("#i-feed"), App.feed(feed));
   },

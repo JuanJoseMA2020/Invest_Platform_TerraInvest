@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import time
 
 from .binance import Demo, ErrorBinance, Publico
 
@@ -89,6 +90,17 @@ class DemoCuenta:
     def _llenado(self, sym: str, orden: dict, desde: int) -> tuple[float, float, float]:
         """(precio medio, cantidad, comision en USDT) de una orden a mercado ya ejecutada."""
         p, q = float(orden.get("avgPrice") or 0), float(orden.get("executedQty") or 0)
+        for _ in range(8):   # la cuenta demo a veces responde antes de ejecutar: se espera el llenado
+            if p > 0 and q > 0:
+                break
+            time.sleep(1)
+            o = self.api.orden(sym, orden.get("orderId"))
+            p, q = float(o.get("avgPrice") or 0), float(o.get("executedQty") or 0)
+        if not (p > 0 and q > 0):   # ultimo recurso: la posicion que Binance tiene abierta
+            pos = self.api.posiciones().get(sym)
+            if not pos:
+                raise RuntimeError("Binance no confirmó el llenado de la orden")
+            p, q = float(pos["entryPrice"]), abs(float(pos["positionAmt"]))
         com = 0.0
         try:
             for t in self.api.operaciones(sym, desde):
@@ -147,5 +159,4 @@ class DemoCuenta:
             return False
 
     def api_ahora(self) -> int:
-        import time
         return int(time.time() * 1000) + self.api.offset
