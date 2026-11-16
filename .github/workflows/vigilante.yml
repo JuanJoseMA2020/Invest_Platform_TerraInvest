@@ -1,0 +1,41 @@
+# Vigilante externo de TerraInvest (corre en GitHub, fuera del servidor de AWS).
+# Cada hora revisa cuándo publicó el servidor su último estado (rama «estado»). Si lleva más de 75 minutos callado
+# (servidor apagado, sin red o con el ciclo detenido) abre un «issue» en este repositorio: GitHub le envía un correo al
+# dueño. Cuando el servidor vuelve a publicar, cierra el issue solo. No usa llaves propias: solo el permiso de este repositorio.
+name: Vigilante del servidor
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch: {}
+permissions:
+  issues: write
+  contents: read
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revisar el estado publicado
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const TITULO = "⚠️ El servidor de TerraInvest no está reportando";
+            let edadMin = 9999, detalle = "";
+            try {
+              const r = await fetch(`https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/estado/estado.json?t=${Date.now()}`);
+              const d = await r.json();
+              edadMin = Math.round((Date.now() - d.actualizado) / 60000);
+              detalle = `Última publicación: ${new Date(d.actualizado).toISOString().replace("T", " ").slice(0, 16)} UTC (hace ${edadMin} min).`;
+            } catch (e) { detalle = "No pude leer el estado publicado: " + e.message; }
+            const abiertos = (await github.rest.issues.listForRepo({ ...context.repo, state: "open", labels: "vigilante" })).data;
+            core.info(detalle);
+            if (edadMin > 75 && !abiertos.length) {
+              await github.rest.issues.create({ ...context.repo, title: TITULO, labels: ["vigilante"],
+                body: `${detalle}\n\nLos stops de los bots siguen guardados en Binance, así que el dinero está protegido. ` +
+                      `Puede ser el servidor de AWS apagado, sin conexión o el ciclo detenido. Avísale a Claude para revisarlo.\n\n` +
+                      `Este aviso se cierra solo cuando el servidor vuelva a publicar.` });
+            } else if (edadMin <= 75) {
+              for (const i of abiertos) {
+                await github.rest.issues.createComment({ ...context.repo, issue_number: i.number, body: `✅ El servidor volvió a reportar. ${detalle}` });
+                await github.rest.issues.update({ ...context.repo, issue_number: i.number, state: "closed" });
+              }
+            }
