@@ -34,7 +34,7 @@ App.rendimientosTesoreria = function () {
 };
 
 App.registrar({
-  id: "rendimientos", titulo: "Rendimientos", icono: "rendimientos", grupo: "Invertir", nuevo: true,
+  id: "rendimientos", titulo: "Rendimientos", icono: "rendimientos", grupo: "Invertir",
   montar(el) {
     el.innerHTML = App.cabecera("Rendimientos · renta pasiva", "Formas reales de poner a ganar intereses el dinero que está quieto, con su tasa de hoy y su riesgo explicado.", '<span id="r-chip" class="chip info"><i></i>Tasas del día</span>') + `
       <div class="grid g4 kpis">

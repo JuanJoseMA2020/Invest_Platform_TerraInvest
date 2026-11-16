@@ -12,7 +12,7 @@ App.bandera = () => {   // aviso global: una señal activa se ve desde cualquier
 };
 
 (async () => {
-  const ORDEN = ["inicio", "trading", "futuros", "rendimientos", "senales", "guia"];
+  const ORDEN = ["inicio", "trading", "futuros", "rendimientos", "senales", "crecimiento", "guia"];
   App.modulos.sort((a, b) => ORDEN.indexOf(a.id) - ORDEN.indexOf(b.id));
   const nav = document.getElementById("nav");
   let grupo = null;
