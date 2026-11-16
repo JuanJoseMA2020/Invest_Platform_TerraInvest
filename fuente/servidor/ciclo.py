@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from . import ajustes as aj
-from . import bot_spot, estrategia as es, informe, publicar, rendimientos
+from . import bot_spot, estrategia as es, informe, publicar, rendimientos, tesoreria
 from .almacen import Almacen, ahora_ms
 from .aviso import Aviso
 from .binance import Demo, ErrorBinance, Publico
@@ -345,14 +345,14 @@ class BotFuturos:
         }
 
 
-def respaldar(db: Almacen, raiz, aviso: Aviso, hoy: str, guardar: int = 7) -> None:
+def respaldar(db: Almacen, raiz, aviso: Aviso, hoy: str, guardar: int = 7, nombre: str = "futuros") -> None:
     """Una copia diaria de la base en ~/plataforma/datos/copias (se guardan 7) y, los lunes, una al chat de Telegram de
     futuros (asi tambien queda fuera del servidor)."""
     if db.get("copia_dia") == hoy:
         return
     carpeta = raiz / "datos" / "copias"
-    ruta = db.copia(carpeta / f"futuros_{hoy}.db")
-    for viejo in sorted(carpeta.glob("futuros_*.db"))[:-guardar]:
+    ruta = db.copia(carpeta / f"{nombre}_{hoy}.db")
+    for viejo in sorted(carpeta.glob(f"{nombre}_*.db"))[:-guardar]:
         viejo.unlink()
     db.set("copia_dia", hoy)
     if datetime.strptime(hoy, "%Y-%m-%d").weekday() == 0 and aviso.activo:
@@ -458,6 +458,17 @@ def main(argv: list[str]) -> int:
         except Exception:  # noqa: BLE001
             pass
     estado["rendimientos"] = (r or {}).get("datos")
+    tdb = Almacen(raiz / "datos" / "tesoreria.db")   # base propia de la tesoreria
+    try:
+        t = tdb.get("tasas")
+        if not t or t.get("dia") != bot.hoy:
+            t = {"dia": bot.hoy, "datos": tesoreria.tasas()}
+            tdb.set("tasas", t)
+        T = tesoreria.Tesoreria(tdb)
+        T.ciclo(bot_spot.caja(cfg.publicar.bot_db), t["datos"].get("USDT"), bot.ahora)
+        estado["tesoreria"] = {**(T.estado() or {}), "tasas": t["datos"]}
+    except Exception as e:  # noqa: BLE001
+        tdb.evento(f"No pude actualizar la tesorería: {type(e).__name__}: {e}", "aviso")
     try:
         informe_mensual(cfg, db, pub, aviso, bot.ahora, bot.hoy)
     except Exception as e:  # noqa: BLE001
@@ -465,6 +476,7 @@ def main(argv: list[str]) -> int:
     estado["informe"] = {k: v for k, v in (db.get("informe") or {}).items() if k != "texto"} or None
     try:
         respaldar(db, raiz, aviso, bot.hoy)
+        respaldar(Almacen(raiz / "datos" / "tesoreria.db"), raiz, Aviso(None, None, "papel"), bot.hoy, nombre="tesoreria")
     except Exception as e:  # noqa: BLE001 - un respaldo fallido se registra, no detiene nada
         db.evento(f"No pude hacer la copia de la base: {e}", "aviso")
     fallo = publicar.publicar(limpiar(estado), raiz / "publicacion", cfg.publicar.repositorio, cfg.publicar.rama, cfg.publicar.llave)

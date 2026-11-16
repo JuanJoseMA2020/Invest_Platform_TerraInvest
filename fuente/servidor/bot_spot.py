@@ -66,3 +66,16 @@ def resumen(ruta: Path | str) -> dict | None:
         }
     finally:
         c.close()
+
+
+def caja(ruta: Path | str) -> float | None:
+    """Efectivo libre del bot de trading (USDT), en solo lectura."""
+    ruta = Path(ruta).expanduser()
+    if not ruta.exists():
+        return None
+    c = sqlite3.connect(f"file:{ruta}?mode=ro", uri=True, timeout=5)
+    try:
+        v = _kv(c, "bot_cash")
+        return float(v) if v is not None else None
+    finally:
+        c.close()

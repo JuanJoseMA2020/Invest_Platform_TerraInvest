@@ -18,6 +18,21 @@ App.rendimientos = {
   },
 };
 
+App.rendimientosTesoreria = function () {
+  const $ = App.$, f = App.fmt, T = App.estado.d && App.estado.d.tesoreria;
+  if (!T || T.ganado == null) { App.texto($("#r-tnota"), "La tesorería empieza a medir en el próximo ciclo del servidor (máximo 15 minutos)."); return; }
+  App.texto($("#r-tg"), f.usdt(T.ganado)); App.texto($("#r-tgs"), `en ${f.falta(T.dias_corridos * 864e5)} · ~${f.usdt(T.anual_estimado)} al año a este ritmo`);
+  App.texto($("#r-tc"), f.usdt(T.caja)); App.texto($("#r-tt"), f.pct(T.tasa, 2, false));
+  const tr = (T.tramos || [])[0]; App.texto($("#r-tts"), tr ? `${f.pct(T.base, 2, false)} base + ${f.pct(tr.extra, 0, false)} extra hasta ${f.dinero(tr.hasta)}` : "tasa base");
+  App.texto($("#r-tnota"), `Medido desde ${f.fechaHora(T.inicio)}. La tasa extra es una promoción de Binance y puede cambiar.`);
+  let acum = 0; const serie = (T.dias || []).map(([dia, g]) => { acum += g; return [Date.parse(dia + "T12:00:00Z"), acum]; });
+  const firma = App.estado.d.actualizado;
+  if (this.tchart && firma !== this.tfirma && serie.length) { this.tfirma = firma; this.tchart.poner([{ color: "#2dd4bf", area: true, datos: serie }]); }
+  App.html($("#r-ttasas"), Object.entries(T.tasas || {}).map(([a, t]) => `<tr><td>${App.coin(a)}</td><td class="num">${f.pct(t.base, 2, false)}</td>
+    <td class="num">${t.tramos && t.tramos.length ? `+${f.pct(t.tramos[0].extra, 0, false)} hasta ${f.dinero(t.tramos[0].hasta)}` : "—"}</td></tr>`).join(""));
+  App.html($("#r-tfeed"), App.feed(T.eventos || []));
+};
+
 App.registrar({
   id: "rendimientos", titulo: "Rendimientos", icono: "rendimientos", grupo: "Invertir", nuevo: true,
   montar(el) {
@@ -28,6 +43,25 @@ App.registrar({
         <div class="card kpi"><span>Neutral con futuros de BTC, hoy</span><b id="r-k3">—</b><span>al año, cambia cada 8 horas</span></div>
         <div class="card kpi"><span>Bot de trading (esperado)</span><b>7–13 %</b><span>al año, con riesgo de precio</span></div>
       </div>
+      <section><h2>Tesorería automática · el efectivo del bot trabajando</h2>
+        <div class="grid split">
+          <div class="card glow"><div class="row between top0"><div><div class="eyebrow">Simulada con datos reales</div><h3 style="margin-top:4px;font-size:18px">Lo que habría ganado el efectivo quieto del bot</h3></div><span id="r-tchip" class="chip info"><i></i>Simulada</span></div>
+            <div class="grid g3" style="margin-top:14px">
+              <div class="kpi"><span>Ganado hasta hoy</span><b id="r-tg" class="num up">—</b><span id="r-tgs"></span></div>
+              <div class="kpi"><span>Efectivo del bot ahora</span><b id="r-tc" class="num">—</b><span>todo estaría en Simple Earn</span></div>
+              <div class="kpi"><span>Tasa que recibiría hoy</span><b id="r-tt" class="num">—</b><span id="r-tts"></span></div></div>
+            <div id="r-tchart" class="chart sm" style="margin-top:12px"></div>
+            <p class="tiny faint" id="r-tnota" style="margin-top:6px"></p></div>
+          <div class="card"><h3>Cómo funcionaría con dinero real</h3><p class="sub">La cuenta demo de Binance no tiene Simple Earn: por eso hoy se simula, con el efectivo y la tasa reales.</p>
+            <ol class="steps" style="margin-top:12px">
+              <li><div>Todo el efectivo que el bot no está usando va a <b>Simple Earn flexible</b> (USDT) y gana intereses cada día.</div></li>
+              <li><div>Cuando el bot quiere comprar, <b>rescata solo lo necesario</b>: en flexible el rescate es inmediato.</div></li>
+              <li><div>Cuando vende, <b>vuelve a invertir</b> lo que liberó.</div></li>
+              <li><div>Si Binance tarda en rescatar, el bot no compra esa vez: nunca opera sin tener el dinero.</div></li></ol>
+            <div class="note info small" style="margin-top:12px">Se enciende solo cuando digas «pasa a dinero real». Riesgo: el mismo de tener el dinero en Binance.</div>
+            <div class="scroll" style="margin-top:12px"><table class="table"><thead><tr><th>Simple Earn flexible hoy</th><th class="num">Base</th><th class="num">Extra (tramo)</th></tr></thead><tbody id="r-ttasas"></tbody></table></div></div>
+        </div>
+        <div class="card" style="margin-top:14px"><h3>Movimientos que habría hecho</h3><div id="r-tfeed" style="margin-top:6px;max-height:260px;overflow:auto"></div></div></section>
       <section><div class="row between" style="margin-bottom:12px"><div class="seg" id="r-seg"><button data-f="todos" class="on">Todas</button><button data-f="USD">En dólares</button><button data-f="staking">Staking</button></div>
         <span class="tiny faint" id="r-act"></span></div>
         <div class="grid g3" id="r-ops"></div></section>
@@ -48,12 +82,15 @@ App.registrar({
       <p class="disclaimer" id="r-fuentes"></p>`;
     App.$("#r-seg", el).onclick = ev => { const b = ev.target.closest("button"); if (!b) return; App.rendimientos.filtro = b.dataset.f; el.querySelectorAll("#r-seg button").forEach(x => x.classList.toggle("on", x === b)); this.firma = null; this.pintar(); };
     ["#r-monto", "#r-meses"].forEach(id => App.$(id, el).addEventListener("input", () => this.pintar()));
+    this.tchart = App.lineas(App.$("#r-tchart", el), { formato: x => x.toFixed(2) + " USDT" });
     this.pintar();
   },
+  pintarTesoreria() { App.rendimientosTesoreria.call(this); },
   mostrar() { App.futuros.tick(false).then(() => this.pintar()).catch(() => {}); },
   pintar() {
     if (!this.montado) return;
     const $ = App.$, f = App.fmt, R = App.rendimientos, ops = R.opciones(), d = App.estado.rend;
+    this.pintarTesoreria();
     if (!ops.length) { App.html($("#r-ops"), '<div class="card empty">Cargando tasas…</div>'); return; }
     const m = R.mejor(), earn = ops.find(o => o.id === "binance_earn"), carry = ops.find(o => o.id === "carry_btc");
     if (m) { App.texto($("#r-k1"), f.pct(m.apy, 2, false)); App.texto($("#r-k1s"), m.nombre); }

@@ -11,6 +11,8 @@ import time
 
 import httpx
 
+from . import tesoreria
+
 # riesgo: 1 muy bajo ... 5 alto · acceso: que tan facil es para una persona en Colombia con cuenta de Binance
 OPCIONES = [
     {"id": "binance_earn", "nombre": "Binance Simple Earn · USDT flexible", "tipo": "Ahorro en dólares", "moneda": "USD", "riesgo": 2,
@@ -94,6 +96,11 @@ def resumen(http: httpx.Client | None = None) -> dict:
             if o["id"] == "binance_earn":
                 f = o["fijo"]
                 d.update(apy=f["apy"], media30=f["apy"], serie=[], fecha=f["fecha"], fuente="anuncio de Binance")
+                vivo = tesoreria.tasas(None, ("USDT",)).get("USDT")   # la tasa que Binance publica hoy, con su tramo de promocion
+                if vivo:
+                    t0 = (vivo["tramos"] or [{}])[0]
+                    d.update(apy=vivo["base"], media30=vivo["base"], fecha="hoy (en vivo)", fuente="Binance (en vivo)",
+                             fijo={**f, "apy": vivo["base"], "extra": t0.get("extra", 0.0), "extra_hasta": t0.get("hasta", 0), "fecha": "hoy"})
             elif o["id"] == "carry_btc":
                 d.update(_carry(http) or {}, fuente="Binance (financiación de BTC)")
             else:
