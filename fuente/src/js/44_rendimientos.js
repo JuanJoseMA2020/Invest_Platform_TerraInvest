@@ -21,7 +21,7 @@ App.rendimientos = {
 App.rendimientosTesoreria = function () {
   const $ = App.$, f = App.fmt, T = App.estado.d && App.estado.d.tesoreria;
   if (!T || T.ganado == null) { App.texto($("#r-tnota"), "La tesorería empieza a medir en el próximo ciclo del servidor (máximo 15 minutos)."); return; }
-  App.texto($("#r-tg"), f.usdt(T.ganado)); App.texto($("#r-tgs"), `en ${f.falta(T.dias_corridos * 864e5)} · ~${f.usdt(T.anual_estimado)} al año a este ritmo`);
+  App.texto($("#r-tg"), f.usdt(T.ganado)); App.texto($("#r-tgs"), `desde ${f.hace(T.inicio)} · ~${f.usdt(T.anual_estimado)} al año a este ritmo`);
   App.texto($("#r-tc"), f.usdt(T.caja)); App.texto($("#r-tt"), f.pct(T.tasa, 2, false));
   const tr = (T.tramos || [])[0]; App.texto($("#r-tts"), tr ? `${f.pct(T.base, 2, false)} base + ${f.pct(tr.extra, 0, false)} extra hasta ${f.dinero(tr.hasta)}` : "tasa base");
   App.texto($("#r-tnota"), `Medido desde ${f.fechaHora(T.inicio)}. La tasa extra es una promoción de Binance y puede cambiar.`);
@@ -109,7 +109,7 @@ App.registrar({
           ${o.fijo ? `<div class="tiny mute">+${f.pct(o.fijo.extra, 0, false)} extra en los primeros ${o.fijo.extra_hasta} USDT · última tasa publicada (${o.fijo.fecha})</div>` : ""}
           <div class="spark" data-id="${o.id}" data-color="${color}" style="height:44px"></div>
           <dl><dt>Acceso</dt><dd>${App.esc(o.acceso)}</dd><dt>Retiro</dt><dd>${App.esc(o.liquidez)}</dd></dl>
-          <p class="small">${App.esc(o.como)}</p><p class="tiny" style="color:#f7b9c2"><b>Cuidado:</b> ${App.esc(o.cuidado)}</p></div>`;
+          <p class="small">${App.esc(o.como)}</p><p class="tiny cuidado"><b>Cuidado:</b> ${App.esc(o.cuidado)}</p></div>`;
       }).join(""));
       vis.forEach(o => { const s = el => el && o.serie && o.serie.length > 1 && App.spark(el, o.serie.map(([mes, v]) => ({ time: Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7) - 1, 1) / 1000, value: 100 * v })), el.dataset.color); s($(`.spark[data-id="${o.id}"]`)); });
       App.html($("#r-fuentes"), `Fuentes: tasas diarias de <a href="https://defillama.com/yields" target="_blank" rel="noopener">DefiLlama</a>, financiación de <a href="https://www.binance.com/es/futures/funding-history/perpetual/funding-fee-history" target="_blank" rel="noopener">Binance</a> y el <a href="${earn ? earn.fijo.fuente : "#"}" target="_blank" rel="noopener">anuncio de Simple Earn</a>. Las tasas cambian todos los días. Nada de esto es asesoría financiera.`);

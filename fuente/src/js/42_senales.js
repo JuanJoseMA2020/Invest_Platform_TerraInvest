@@ -32,6 +32,7 @@ App.senales = {
                               sugerido: this.monto(), monto: null, binance: null, cierre: null, plataforma: null, pago: null, neto: null });
         if (this.S.senales.length > 5000) this.S.senales = this.S.senales.slice(-5000);
         this.guardar(); App.sonido.beep();
+        App.notificar(`${n} va a ${p > 0.5 ? "SUBIR ▲" : "BAJAR ▼"}`, `Cierre ${App.fmt.hora(t0 + this.H)} · entra con ${App.fmt.dinero(this.monto())}`);
       }
     });
     await this.calificar();
@@ -98,7 +99,7 @@ App.registrar({
   montar(el) {
     const N = App.senales, M = N.M, S = N.S;
     el.innerHTML = App.cabecera("Señales · sube o baja", "El software avisa; tú haces la operación en la cuenta <b>demo</b> de la plataforma.",
-      `<span id="s-test" class="chip"><i></i>Autoprueba…</span><button id="s-son" class="btn sm">${App.sonido.ctx ? "Sonido activado" : "Activar sonido"}</button>`) + `
+      `<span id="s-test" class="chip"><i></i>Autoprueba…</span><button id="s-son" class="btn sm">${App.sonido.ctx ? "Sonido y avisos activados" : "Activar sonido y avisos"}</button>`) + `
       <div class="grid g2">
         <div class="card"><h3>Tu prueba</h3><div class="row" style="margin-top:12px">
           <label class="field">Saldo demo<input id="s-saldo" type="number" min="0" step="1" value="${S.saldo}"></label>
@@ -131,7 +132,7 @@ App.registrar({
     this.g = App.grafico(App.$("#s-chart", el)); this.sel = Object.keys(M.activos)[0];
     const chip = App.$("#s-test", el); chip.className = "chip " + (N.pruebaOK ? "ok" : "bad"); chip.innerHTML = `<i></i>${N.pruebaOK ? "Autoprueba correcta" : "Autoprueba fallida: sin señales"}`;
     for (const [id, k] of [["#s-saldo", "saldo"], ["#s-pct", "pct"], ["#s-pago", "pago"]]) App.$(id, el).addEventListener("input", e => { const x = +e.target.value; if (isFinite(x) && x > 0) { S[k] = x; S.modU = Date.now(); N.guardar(); this.pintar(); } });
-    App.$("#s-son", el).onclick = e => { App.sonido.activar(); e.target.textContent = "Sonido activado"; };
+    App.$("#s-son", el).onclick = e => { App.sonido.activar(); App.pedirAvisos(); e.target.textContent = "Sonido y avisos activados"; };
     App.$("#s-chk", el).addEventListener("input", e => { N.escrito[e.target.dataset.n] = +e.target.value; this.pintar(); });
     App.$("#s-seg", el).onclick = e => { const b = e.target.closest("button"); if (!b) return; this.sel = b.dataset.n; el.querySelectorAll("#s-seg button").forEach(x => x.classList.toggle("on", x === b)); this.pintar(); };
     el.addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (b) N.accion(b.dataset.id, b.dataset.a === "res" ? "res" : b.dataset.a, b.dataset.v); });

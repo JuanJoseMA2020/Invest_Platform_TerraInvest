@@ -37,6 +37,9 @@ App.registrar({
       ["¿Cómo veo lo mismo en el PC y en el celular?", "Lo de los bots siempre es igual en todos lados (viene del servidor). Para tu marcador de señales y el simulador, pulsa el botón de arriba «guardar en la nube», conecta tu GitHub una vez y escanea el código QR con el celular."],
       ["¿Qué hago si llega un aviso de error a Telegram?", "Nada urgente: los stops están guardados en Binance. Cuéntame qué dice el aviso y lo reviso."],
       ["¿Cada cuánto debo mirar esto?", "No hace falta mirar a diario. Sugerencia: lee los avisos de Telegram cuando lleguen, mira Inicio una vez por semana y, el día 1 de cada mes, las monedas nuevas."],
+      ["¿Puedo tenerla como una app en el celular?", "Sí. Abre el enlace en Chrome (Android) o Safari (iPhone) y elige «Agregar a pantalla de inicio» o «Instalar». En el PC aparece un botón con una flecha hacia abajo arriba a la derecha."],
+      ["¿Qué son los botones de arriba?", "El ojo oculta las cifras (útil si alguien ve tu pantalla). El de la pantalla, el sol o la luna cambia el tema: automático, claro u oscuro. El aviso de la nube guarda tus datos en tu GitHub."],
+      ["¿Cómo me entero de una señal si no estoy mirando?", "En Señales pulsa «Activar sonido y avisos» y acepta el permiso: el navegador te avisa aunque estés en otra pestaña."],
       ["¿Cuándo pasar a dinero real?", "Cuando haya varios meses de resultados en demo que se parezcan a lo esperado (trading +7 a +13 % al año; futuros, alrededor de +9 %). Empezar con poco y con la misma configuración."],
     ];
     el.innerHTML = App.cabecera("Guía de TerraInvest", "Para qué sirve cada parte, cómo usarla y qué significan las palabras raras.", "") + `

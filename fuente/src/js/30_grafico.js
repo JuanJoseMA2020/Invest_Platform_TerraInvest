@@ -5,7 +5,7 @@ App.grafico = el => {
   const chart = LightweightCharts.createChart(el, {
     autoSize: true,
     layout: { background: { color: "transparent" }, textColor: v("--mute"), fontFamily: v("--font"), fontSize: 12 },
-    grid: { vertLines: { color: "rgba(255,255,255,.035)" }, horzLines: { color: "rgba(255,255,255,.035)" } },
+    grid: { vertLines: { color: v("--grid") }, horzLines: { color: v("--grid") } },
     rightPriceScale: { borderColor: v("--line") }, timeScale: { borderColor: v("--line"), timeVisible: true, secondsVisible: false },
     crosshair: { mode: 0 }, localization: { locale: "es-CO" },
   });
@@ -34,7 +34,7 @@ App.lineas = (el, opciones) => {
   const chart = LightweightCharts.createChart(el, {
     autoSize: true,
     layout: { background: { color: "transparent" }, textColor: v("--mute"), fontFamily: v("--font"), fontSize: 11.5, attributionLogo: false },
-    grid: { vertLines: { visible: false }, horzLines: { color: "rgba(255,255,255,.04)" } },
+    grid: { vertLines: { visible: false }, horzLines: { color: v("--grid") } },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } }, timeScale: { borderVisible: false, timeVisible: !!o.horas },
     crosshair: { mode: 0 }, localization: { locale: "es-CO", priceFormatter: o.formato || (x => x.toLocaleString("es-CO", { maximumFractionDigits: 2 })) },
     handleScroll: false, handleScale: false,
@@ -49,7 +49,7 @@ App.lineas = (el, opciones) => {
                              : chart.addLineSeries({ color: s.color, lineWidth: 2, priceLineVisible: false, lastValueVisible: true, lineStyle: s.punteada ? 2 : 0 });
         const vistos = new Map(); s.datos.forEach(([t, y]) => { if (isFinite(y)) vistos.set(local(t), y); });
         serie.setData([...vistos].sort((a, b) => a[0] - b[0]).map(([time, value]) => ({ time, value })));
-        if (s.base != null) serie.createPriceLine({ price: s.base, color: "rgba(255,255,255,.25)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+        if (s.base != null) serie.createPriceLine({ price: s.base, color: v("--base-line"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
         return serie;
       });
       chart.timeScale().fitContent();

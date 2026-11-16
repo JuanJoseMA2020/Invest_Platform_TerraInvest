@@ -77,3 +77,47 @@ App.sonido = {
 };
 
 App.cabecera = (titulo, sub, chips) => `<div class="top"><div><h1>${titulo}</h1><p>${sub}</p></div><div class="chips">${chips || ""}</div></div>`;
+
+Object.assign(App.ico, {
+  ojo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  ojoNo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6A17.4 17.4 0 0 0 2 12s3.6 7 10 7a10.4 10.4 0 0 0 5.4-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+  sol: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  luna: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+  auto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+  bajar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>',
+});
+
+/* Avisos del navegador (señales): llegan aunque la pestaña esté en segundo plano. */
+App.pedirAvisos = () => { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) { /* no disponible */ } };
+App.notificar = (titulo, texto) => {
+  try { if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") new Notification(titulo, { body: texto, tag: titulo }); } catch (e) { /* no disponible */ }
+};
+
+/* Preferencias de la persona: tema, modo privado e instalación como app. */
+App.prefs = {
+  TEMAS: ["sistema", "claro", "oscuro"],
+  tema() { return App.store.get("tema", "sistema"); },
+  montar() {
+    const bt = document.getElementById("b-tema"), bp = document.getElementById("b-privado"), bi = document.getElementById("b-instalar");
+    const pintar = () => {
+      const t = this.tema(); bt.innerHTML = App.ico[{ sistema: "auto", claro: "sol", oscuro: "luna" }[t]]; bt.title = "Tema: " + t + " (clic para cambiar)";
+      const p = App.store.get("privado", false); document.body.classList.toggle("privado", p); bp.innerHTML = App.ico[p ? "ojoNo" : "ojo"]; bp.classList.toggle("on", p);
+      bp.title = p ? "Mostrar cifras" : "Ocultar cifras (para mostrar la pantalla)";
+    };
+    bt.onclick = () => { const t = this.TEMAS[(this.TEMAS.indexOf(this.tema()) + 1) % 3]; App.store.set("tema", t); location.reload(); };   // recarga: los gráficos toman los colores nuevos
+    bp.onclick = () => { App.store.set("privado", !App.store.get("privado", false)); pintar(); };
+    bi.innerHTML = App.ico.bajar;
+    window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); this.instalar = e; bi.hidden = false; });
+    bi.onclick = async () => { if (!this.instalar) return; this.instalar.prompt(); await this.instalar.userChoice; this.instalar = null; bi.hidden = true; };
+    if (location.protocol === "https:" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+    pintar();
+  },
+};
+
+/* Copia de los datos de la persona en un archivo (marcador de señales y simulador). */
+App.descargarDatos = () => {
+  const d = { app: "TerraInvest", fecha: new Date().toISOString(), senales: App.store.get("senales", null), futuros: App.store.get("futuros", null) };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 1)], { type: "application/json" }));
+  a.download = `terrainvest-mis-datos-${d.fecha.slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};

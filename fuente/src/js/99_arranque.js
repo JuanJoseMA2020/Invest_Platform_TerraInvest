@@ -25,6 +25,7 @@ App.bandera = () => {   // aviso global: una señal activa se ve desde cualquier
   document.getElementById("bandera").addEventListener("click", () => App.ir("senales"));
   document.getElementById("vistas").innerHTML = App.modulos.map(m => `<div class="vista" data-id="${m.id}" hidden></div>`).join("");
   App.senales.autoprueba();
+  App.prefs.montar();
   document.addEventListener("click", e => { if (e.target.closest("[data-nube]")) App.nube.ventana(); });
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* el navegador decide */ }
   if (!App.nube.leerEnlace()) App.nube.bajar();

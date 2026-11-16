@@ -140,13 +140,14 @@ App.nube = {
       ${con ? `<div class="note ${this.estado === "error" ? "bad" : "good"} small" style="margin-top:12px">${this.estado === "error" ? App.esc(this.error) : "Conectado. Última sincronización " + App.fmt.hace(this.ultimo) + "."}</div>
         <h3 style="margin-top:18px">Conectar el celular</h3><p class="small mute">Escanea este código con la cámara del celular. Abre la página ya conectada (usa el navegador normal, no el de Telegram o WhatsApp).</p>
         <div class="row" style="margin-top:10px;align-items:flex-start"><div id="nube-qr" class="qr"></div><p class="tiny faint" style="max-width:260px">El código lleva tu llave de GitHub: no le tomes foto ni lo compartas. Solo sirve para leer y escribir tus notas privadas.</p></div>
-        <div class="row" style="margin-top:14px"><button class="btn sm" data-sync>Sincronizar ahora</button><button class="btn sm ghost" data-off>Desconectar este dispositivo</button></div>`
+        <div class="row" style="margin-top:14px"><button class="btn sm" data-sync>Sincronizar ahora</button><button class="btn sm" data-bajar>Descargar mis datos</button><button class="btn sm ghost" data-off>Desconectar este dispositivo</button></div>`
       : `<ol class="steps" style="margin-top:14px">
           <li><div>Entra a <a href="https://github.com/settings/tokens/new?scopes=gist&description=TerraInvest%20datos" target="_blank" rel="noopener">github.com › Settings › Developer settings › Tokens (classic) › Generate new token (classic)</a>. El enlace ya deja todo listo.</div></li>
           <li><div>Revisa: nombre <b>TerraInvest datos</b>, vencimiento <b>No expiration</b> (o el más largo) y marcada <b>solo</b> la casilla <b>gist</b>. Ninguna otra.</div></li>
           <li><div>Baja y pulsa <b>Generate token</b>. Copia la llave (empieza por <b>ghp_</b>) y pégala aquí, solo en esta página, nunca en un chat.</div></li></ol>
         ${this.token ? `<div class="note bad small" style="margin-top:12px">${App.esc(this.error || "")} Crea una llave nueva y pégala abajo.</div>` : ""}
-        <div class="row" style="margin-top:14px"><label class="field grow">Llave de GitHub<input id="nube-tok" type="password" autocomplete="off" placeholder="ghp_…" style="width:100%"></label><button class="btn pri" data-on style="align-self:flex-end">Conectar</button></div>`}</div>`;
+        <div class="row" style="margin-top:14px"><label class="field grow">Llave de GitHub<input id="nube-tok" type="password" autocomplete="off" placeholder="ghp_…" style="width:100%"></label><button class="btn pri" data-on style="align-self:flex-end">Conectar</button></div>
+        <div class="row between" style="margin-top:16px"><span class="tiny faint">¿Solo quieres una copia en un archivo?</span><button class="btn sm" data-bajar>Descargar mis datos</button></div>`}</div>`;
     if (con && window.qrcode) { const q = qrcode(0, "M"); q.addData(this.enlace()); q.make(); document.getElementById("nube-qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); }
   },
   clic(e) {
@@ -155,5 +156,6 @@ App.nube = {
     if (t.closest("[data-on]")) { const v = document.getElementById("nube-tok").value; if (v.trim().length > 20) this.conectar(v); else App.toast("Esa llave parece incompleta"); }
     if (t.closest("[data-off]")) this.desconectar();
     if (t.closest("[data-sync]")) this.bajar();
+    if (t.closest("[data-bajar]")) App.descargarDatos();
   },
 };
