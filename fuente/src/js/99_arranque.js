@@ -29,8 +29,8 @@ App.bandera = () => {   // aviso global: una señal activa se ve desde cualquier
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* el navegador decide */ }
   if (!App.nube.leerEnlace()) App.nube.bajar();
   App.nube.pintar();
-  setInterval(() => { if (App.nube.token && document.visibilityState === "visible") App.nube.bajar(); }, 90000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && App.nube.token) App.nube.bajar(); else if (App.nube.token) App.nube.subir(); });
+  setInterval(() => { if (App.nube.token && document.visibilityState === "visible") App.nube.bajar(); }, 300000);
+  document.addEventListener("visibilitychange", () => { if (!App.nube.token) return; if (document.visibilityState === "visible") { if (Date.now() - App.nube.ultimo > 60000) App.nube.bajar(); } else App.nube.subir(true); });
   window.addEventListener("hashchange", () => App.ir(location.hash.replace("#/", "")));
   App.ir(location.hash.replace("#/", "") || "inicio");
   App.ticker.reloj();

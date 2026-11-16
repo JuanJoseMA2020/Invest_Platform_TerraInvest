@@ -4,16 +4,25 @@
 App.nube = {
   API: "https://api.github.com", ARCHIVO: "terrainvest.json", DESC: "TerraInvest · datos (privado)",
   CLAVES: ["senales", "futuros"],
-  estado: "apagada", error: null, ultimo: 0, subiendo: null, firmaSubida: "",
+  estado: "apagada", error: null, ultimo: 0, subiendo: null, firmaSubida: "", ultimaSubida: 0,
+  espera: +(App.store.get("nube_espera", 0)) || 0,   // GitHub pidio una pausa: no se le consulta antes de esta hora
+  MIN_SUBIDA: 60000,                                 // como maximo una subida por minuto (GitHub limita las consultas)
   get token() { return App.store.get("nube_token", ""); },
   get gist() { return App.store.get("nube_gist", ""); },
 
   async pedir(metodo, ruta, cuerpo) {
+    if (Date.now() < this.espera) { const e = new Error(`GitHub pidió una pausa. Vuelvo a sincronizar a las ${App.fmt.hora(this.espera)}; mientras tanto todo queda guardado en este dispositivo.`); e.pausa = true; throw e; }
     const r = await fetch(this.API + ruta, { method: metodo, cache: "no-store",
       headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json", ...(cuerpo ? { "Content-Type": "application/json" } : {}) },
       body: cuerpo ? JSON.stringify(cuerpo) : undefined });
     if (r.ok) return r.json();
     let msg = ""; try { msg = (await r.json()).message || ""; } catch (e) { /* sin detalle */ }
+    if (r.status === 429 || /rate limit/i.test(msg)) {   // limite de consultas: se espera hasta que GitHub lo reinicie
+      const reinicio = +(r.headers.get("x-ratelimit-reset") || 0) * 1000;
+      this.espera = Math.max(reinicio, Date.now() + 5 * 60000); App.store.set("nube_espera", this.espera);
+      const e = new Error(`GitHub pidió una pausa por muchas consultas. Vuelvo a sincronizar a las ${App.fmt.hora(this.espera)}; mientras tanto todo queda guardado en este dispositivo.`);
+      e.pausa = true; throw e;
+    }
     const err = new Error(r.status === 401 ? "La llave de GitHub no sirve o venció (revisa que la copiaste completa)"
       : (r.status === 403 || r.status === 404) ? `GitHub no dio permiso (${r.status}${msg ? ": " + msg : ""}). La llave necesita la casilla «gist».`
       : `GitHub respondió ${r.status}${msg ? ": " + msg : ""}`);
@@ -71,15 +80,18 @@ App.nube = {
       const unido = this.unir(this.local(), remoto);
       this.aplicar(unido);
       this.estado = "ok"; this.error = null; this.ultimo = Date.now();
-      if (JSON.stringify(unido) !== JSON.stringify({ senales: remoto && remoto.senales, futuros: remoto && remoto.futuros })) this.programar(500);
-    } catch (e) { this.estado = "error"; this.error = e.message; this.llaveMala = e.status === 401 || e.status === 403; }
+      if (JSON.stringify(unido) !== JSON.stringify({ senales: remoto && remoto.senales, futuros: remoto && remoto.futuros })) this.programar(5000);
+    } catch (e) { this.estado = "error"; this.error = e.message; this.llaveMala = !e.pausa && (e.status === 401 || e.status === 403); }
     App.pintarTodo(); this.pintar();
   },
 
-  async subir() {
+  async subir(forzar) {
     if (!this.token) return;
     const datos = { v: 1, ...this.local() }, firma = JSON.stringify(datos);
     if (firma === this.firmaSubida) return;
+    const falta = this.ultimaSubida + this.MIN_SUBIDA - Date.now();
+    if (falta > 0 && !forzar) { this.programar(falta); return; }
+    this.ultimaSubida = Date.now();
     try {
       const id = await this.buscarGist();
       await this.pedir("PATCH", "/gists/" + id, { files: { [this.ARCHIVO]: { content: firma } } });
@@ -88,11 +100,11 @@ App.nube = {
     this.pintar();
   },
 
-  programar(ms) { clearTimeout(this.subiendo); this.subiendo = setTimeout(() => this.subir(), ms == null ? 2500 : ms); },
+  programar(ms) { if (this.subiendo && ms == null) return; clearTimeout(this.subiendo); this.subiendo = setTimeout(() => { this.subiendo = null; this.subir(); }, ms == null ? 20000 : ms); },
   cambio(k) { if (this.token && this.CLAVES.includes(k)) this.programar(); },
 
   async conectar(token) {
-    this.llaveMala = false;
+    this.llaveMala = false; this.espera = 0; App.store.set("nube_espera", 0);
     App.store.set("nube_token", token.trim()); App.store.set("nube_gist", "");
     this.estado = "conectando"; this.pintar();
     await this.bajar();
@@ -111,6 +123,7 @@ App.nube = {
 
   chip() {
     if (!this.token) return '<button class="chip warn" data-nube><i></i>Tus datos solo en este dispositivo · guardar en la nube</button>';
+    if (this.estado === "error" && Date.now() < this.espera) return `<button class="chip warn" data-nube><i></i>Nube en pausa hasta las ${App.fmt.hora(this.espera)} · datos guardados aquí</button>`;
     if (this.estado === "error") return `<button class="chip bad" data-nube><i></i>Nube: ${App.esc(this.error)}</button>`;
     if (this.estado !== "ok") return '<button class="chip" data-nube><i></i>Conectando con la nube…</button>';
     return `<button class="chip ok" data-nube><i></i>Guardado en la nube · ${App.fmt.hace(this.ultimo)}</button>`;
