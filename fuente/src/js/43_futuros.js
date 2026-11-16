@@ -220,7 +220,7 @@ App.registrar({
       <ol class="steps" style="margin-top:12px">
         <li><div>En <b>demo.binance.com</b> → tu perfil → <b>Gestión de API</b> → crea una llave nueva con permiso de <b>Futuros</b>.</div></li>
         <li><div>En Telegram, abre <b>@BotFather</b> → <b>/newbot</b> → crea un bot nuevo (por ejemplo «TerraInvest Futuros») y envíale «hola».</div></li>
-        <li><div>En tu carpeta <b>Bot de Trading › 08 PLATAFORMA WEB</b>, doble clic en <b>«Conectar futuros.bat»</b> y pega lo que te pide. Las llaves van directo al servidor.</div></li>
+        <li><div>En tu carpeta <b>Bot de Trading › 08 TERRAINVEST</b>, doble clic en <b>«Conectar futuros.bat»</b> y pega lo que te pide. Las llaves van directo al servidor.</div></li>
       </ol><p class="tiny faint" style="margin-top:10px">No transfieras dinero entre Spot y Futuros en la cuenta demo: Spot lo usa el bot de trading.</p></div></div></div>`);
   },
 
