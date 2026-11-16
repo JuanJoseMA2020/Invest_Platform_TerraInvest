@@ -7,8 +7,10 @@ instalacion. El codigo fuente sigue separado por modulos:
     src/js/00_nucleo.js      navegacion, guardado local, formato
     src/js/10_binance.js     datos publicos de Binance
     src/js/20_modelos.js     calculos (señales y tendencia), verificados contra Python con plataforma/probar.py
-    src/js/30_grafico.js     graficos de velas
-    src/js/40..43_*.js       un archivo por modulo: Inicio, Trading, Señales, Futuros
+    src/js/15_estado.js      estado real de los bots (lo publica el servidor: plataforma/servidor)
+    src/js/16_ticker.js      barra de precios
+    src/js/30_grafico.js     graficos de velas y curvas
+    src/js/40..44_*.js       un archivo por modulo: Inicio, Trading, Señales, Futuros, Rendimientos
     src/js/99_arranque.js    enciende todo
 
 Uso (desde la carpeta del proyecto):
@@ -29,6 +31,7 @@ from bot.config import load
 sys.stdout.reconfigure(encoding="utf-8")
 HERE = Path(__file__).resolve().parent
 SRC, DIST, MODELOS = HERE / "src", HERE / "dist", HERE / "modelos"
+ESTADO_URL = "https://raw.githubusercontent.com/JuanJoseMA2020/Invest_Platform_TerraInvest/estado/estado.json"
 FUT_SIMBOLOS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"]
 
 # Resultados de las validaciones (scripts/validar_tendencia.py y scripts/investigacion/futuros.py, nov-2026)
@@ -57,8 +60,19 @@ def datos(rapido: bool) -> dict:
                 minimos[s["symbol"]] = float(next(f["notional"] for f in s["filters"] if f["filterType"] == "MIN_NOTIONAL"))
     except Exception as e:  # noqa: BLE001
         print("Sin minimos de futuros (se usa 5 USDT):", e)
+    from plataforma.servidor import rendimientos
+    try:   # copia de respaldo: la pagina usa la version del servidor si esta disponible
+        rend = rendimientos.resumen()
+    except Exception as e:  # noqa: BLE001
+        print("Sin tasas de rendimientos:", e)
+        rend = None
+    try:
+        estado = httpx.get(ESTADO_URL, timeout=30).json()
+    except Exception:  # noqa: BLE001 - el servidor aun no ha publicado
+        estado = None
     return {
         "generado": pd.Timestamp.now().isoformat(timespec="minutes"),
+        "rendimientos": rend, "estado": estado,
         "senales": senales,
         "tendencia": {"canal_in": c.channel_in, "canal_out": c.channel_out, "gate_dias": c.gate_days, "stop_atr": c.stop_atr,
                       "riesgo": cfg.risk.risk_per_trade, "top": u.dynamic_top or 10, "ventana": u.dynamic_window_days,

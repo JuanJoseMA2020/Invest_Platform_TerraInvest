@@ -93,7 +93,7 @@ App.senales = {
 };
 
 App.registrar({
-  id: "senales", titulo: "Señales", icono: "senales",
+  id: "senales", titulo: "Señales", icono: "senales", grupo: "Práctica manual",
   montar(el) {
     const N = App.senales, M = N.M, S = N.S;
     el.innerHTML = App.cabecera("Señales · sube o baja", "El software avisa; tú haces la operación en la cuenta <b>demo</b> de la plataforma.",

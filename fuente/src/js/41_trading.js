@@ -53,10 +53,22 @@ App.trading = {
 };
 
 App.registrar({
-  id: "trading", titulo: "Trading", icono: "trading",
+  id: "trading", titulo: "Trading", icono: "trading", grupo: "Bots automáticos",
   montar(el) {
     const c = App.trading.cfg, v = c.validacion;
-    el.innerHTML = App.cabecera("Trading · motor de tendencia", "Lo que el bot está viendo ahora mismo en el mercado.", '<span id="t-chip" class="chip"><i></i>Cargando…</span>') + `
+    el.innerHTML = App.cabecera("Bot de trading", "Compra monedas que entran en tendencia y las vende cuando la tendencia se rompe. Opera solo, en la cuenta de práctica de Binance.", '<span id="tb-srv"></span><span id="t-chip" class="chip"><i></i>Cargando…</span>') + `
+      <div class="grid g4 kpis">
+        <div class="card kpi"><span>Patrimonio del bot</span><b id="tb-eq" class="num">—</b><span id="tb-eqs"></span></div>
+        <div class="card kpi"><span>Ganado / perdido</span><b id="tb-res" class="num">—</b><span id="tb-ress"></span></div>
+        <div class="card kpi"><span>Operaciones cerradas</span><b id="tb-n" class="num">—</b><span id="tb-ns"></span></div>
+        <div class="card kpi"><span>Ahora mismo</span><b id="tb-st">—</b><span id="tb-sts"></span></div>
+      </div>
+      <section><div class="grid split">
+        <div class="card"><div class="row between"><h3>Patrimonio del bot</h3><span class="tiny faint" id="tb-desde"></span></div><div id="tb-curva" class="chart md" style="margin-top:10px"></div></div>
+        <div class="card"><h3>Posiciones abiertas</h3><div class="scroll"><table class="table" style="margin-top:6px"><thead><tr><th>Moneda</th><th class="num">Entrada</th><th class="num">Precio</th><th class="num">Stop</th><th class="num">Resultado</th></tr></thead><tbody id="tb-open"></tbody></table></div>
+          <h3 style="margin-top:16px">Últimas operaciones</h3><div class="scroll" style="max-height:260px;overflow:auto"><table class="table" style="margin-top:6px"><thead><tr><th>Cierre</th><th>Moneda</th><th class="num">Resultado</th><th>Motivo</th></tr></thead><tbody id="tb-hist"></tbody></table></div></div>
+      </div></section>
+      <section><h2>Lo que el bot ve en el mercado</h2></section>
       <div class="grid g4 kpis">
         <div class="card kpi"><span>Mercado</span><b id="t-k1">—</b><span id="t-k1s"></span></div>
         <div class="card kpi"><span>Monedas en tendencia</span><b id="t-k2">—</b><span>de las ${c.top} más negociadas del mes</span></div>
@@ -78,12 +90,13 @@ App.registrar({
             <tr><td>Examen final 2025-26</td><td class="num">${App.fmt.pct(v.examen)}</td><td class="num down">${App.fmt.pct(v.btc_examen)}</td></tr></table>
             <p class="tiny mute" style="margin-top:8px">Medido con todas las monedas que existieron en Binance. Para planear, cuenta con ${v.prudente} al año.</p>
           </details>
-          <div class="note info small" style="margin-top:12px">Esta pantalla no ve tu cuenta. Las posiciones reales, el capital y los avisos del bot llegan por <b>Telegram</b> (/estado, /motores).</div>
+          <div class="note info small" style="margin-top:12px">Arriba ves la cuenta real del bot (se actualiza cada 15 minutos). Los avisos al instante llegan por <b>Telegram</b> (/estado, /motores).</div>
         </div>
       </div></section>
       <section><h2>Las monedas del mes</h2><div class="card scroll"><table class="table"><thead><tr><th>Moneda</th><th>Precio</th><th>Estado</th><th>Compra sobre</th><th>Vende bajo</th><th>Stop si comprara hoy</th></tr></thead><tbody id="t-body"></tbody></table></div>
       <p class="tiny mute" style="margin-top:8px">El grupo se renueva el día 1 de cada mes con las ${c.top} monedas de mayor volumen de los últimos ${c.ventana} días.</p></section>`;
     this.g = App.grafico(App.$("#t-chart", el));
+    this.curva = App.lineas(App.$("#tb-curva", el), {});
     App.$("#t-body", el).addEventListener("click", e => { const tr = e.target.closest("tr[data-s]"); if (tr) { App.trading.sel = tr.dataset.s; this.pintar(); } });
     this.pintar();
   },
@@ -91,6 +104,7 @@ App.registrar({
   pintar() {
     const T = App.trading, f = App.fmt, $ = App.$;
     if (!this.montado) return;
+    this.pintarCuenta();
     const chip = $("#t-chip");
     if (!T.listo) { chip.className = "chip" + (T.error ? " bad" : ""); chip.innerHTML = `<i></i>${T.error ? "Sin conexión con Binance" : "Calculando las monedas del mes…"}`; return; }
     chip.className = "chip " + (T.btc.sano ? "ok" : "bad"); chip.innerHTML = `<i></i>${T.btc.sano ? "Bitcoin sano: puede comprar" : "Bitcoin débil: en efectivo"}`;
@@ -111,6 +125,28 @@ App.registrar({
       this.g.velas(s.velas.slice(-360), s.sym);
       this.g.niveles([{ precio: s.hi, titulo: "compra", color: "#1fcf8f" }, { precio: s.lo, titulo: "venta", color: "#ff5a6e" }]);
     }
+  },
+  pintarCuenta() {   // la cuenta real del bot, publicada por el servidor
+    const $ = App.$, f = App.fmt, B = App.estado.bot;
+    App.html($("#tb-srv"), App.estado.chip());
+    if (!B || B.patrimonio == null) return;
+    const base = (B.inicial || 100) + (B.aportes || 0), vivo = s => (App.ticker.p[s] || {}).precio || (App.trading.filas.find(x => x.sym === s) || {}).precio;
+    const abiertas = B.abiertas.map(o => { const p = vivo(o.sym); return { ...o, vivo: p, res: p ? o.cant * (p - o.p_in) : null }; });
+    const eq = B.efectivo != null && abiertas.every(o => o.vivo) ? B.efectivo + abiertas.reduce((a, o) => a + o.cant * o.vivo, 0) : B.patrimonio, r = eq / base - 1;
+    App.texto($("#tb-eq"), f.usdt(eq)); App.texto($("#tb-eqs"), `empezó con ${f.usdt(B.inicial)}${B.aportes ? " + aportes " + f.usdt(B.aportes) : ""}`);
+    App.texto($("#tb-res"), f.usdt(eq - base, true)); $("#tb-res").className = "num " + (r >= 0 ? "up" : "down"); App.texto($("#tb-ress"), f.pct(r, 2) + " en total");
+    const t = B.totales; App.texto($("#tb-n"), String(t.n)); App.texto($("#tb-ns"), `${t.ganadas} ganadas · ${f.usdt(t.pnl, true)}`);
+    App.texto($("#tb-st"), B.pausado ? "En pausa" : abiertas.length ? `${abiertas.length} invertida${abiertas.length > 1 ? "s" : ""}` : "En efectivo");
+    $("#tb-st").className = B.pausado ? "down" : abiertas.length ? "up" : "warn";
+    App.texto($("#tb-sts"), abiertas.length ? `${f.pct(B.exposicion || 0, 0, false)} del capital invertido` : "espera a que Bitcoin recupere su media");
+    App.texto($("#tb-desde"), B.curva.length ? "desde " + f.fechaHora(B.curva[0][0]) : "");
+    const firma = App.estado.d.actualizado;
+    if (this.curva && firma !== this.firma) { this.firma = firma; this.curva.poner([{ color: "#4f8cff", area: true, datos: B.curva, base }]); }
+    App.html($("#tb-open"), abiertas.map(o => `<tr><td>${App.coin(o.sym.slice(0, -4))}</td><td class="num">${f.precio(o.p_in)}</td><td class="num">${f.precio(o.vivo)}</td>
+      <td class="num">${f.precio(o.stop)} <span class="faint">${o.vivo ? f.pct(o.stop / o.vivo - 1, 1) : ""}</span></td><td class="num ${o.res >= 0 ? "up" : "down"}">${f.dinero(o.res, true)}</td></tr>`).join("")
+      || '<tr><td colspan="5" class="empty">Sin posiciones: el bot está en efectivo.</td></tr>');
+    App.html($("#tb-hist"), B.cerradas.slice(0, 30).map(o => `<tr><td class="num">${f.fecha(o.t_out)}</td><td>${App.coin(o.sym.slice(0, -4))}</td><td class="num ${o.pnl >= 0 ? "up" : "down"}">${f.dinero(o.pnl, true)}</td><td class="wrap tiny mute">${App.esc(o.motivo)}</td></tr>`).join("")
+      || '<tr><td colspan="4" class="empty">Aún no hay operaciones cerradas.</td></tr>');
   },
   reloj() { const p = 4 * 3600000, t = App.api.ahora(); App.texto(App.$("#t-k3"), App.fmt.falta(Math.ceil(t / p) * p - t)); },
 });
