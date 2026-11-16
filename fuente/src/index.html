@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080b12">
+<title>Plataforma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="logo" id="logo"></div><div><b>Plataforma</b><span>Trading · Señales · Futuros</span></div></div>
+    <nav id="nav" style="display:contents"></nav>
+    <div class="foot">Datos públicos de Binance.<br>Gráficos: TradingView Lightweight Charts.<br><span id="version"></span></div>
+  </aside>
+  <main class="main" id="vistas"></main>
+</div>
+<div id="bandera"></div>
+<script>/*__VENDOR__*/</script>
+<script>
+const DATOS = /*__DATOS__*/null;
+/*__JS__*/
+document.getElementById("logo").innerHTML = App.ico.logo;
+document.getElementById("version").textContent = "Versión " + DATOS.generado.replace("T", " ");
+</script>
+</body>
+</html>
