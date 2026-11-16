@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from . import ajustes as aj
-from . import bot_spot, estrategia as es, publicar, rendimientos
+from . import bot_spot, estrategia as es, informe, publicar, rendimientos
 from .almacen import Almacen, ahora_ms
 from .aviso import Aviso
 from .binance import Demo, ErrorBinance, Publico
@@ -359,6 +359,33 @@ def respaldar(db: Almacen, raiz, aviso: Aviso, hoy: str, guardar: int = 7) -> No
         aviso.enviar_archivo(ruta, f"Copia semanal de la base del bot de futuros ({hoy}). Guárdala; no hay que hacer nada más.")
 
 
+def informe_mensual(cfg, db: Almacen, pub: Publico, aviso: Aviso, ahora: int, hoy: str, forzar: bool = False) -> dict | None:
+    """El dia 1 de cada mes: informe del mes anterior a Telegram (y a la pagina). Con forzar: el mes en curso, parcial."""
+    if forzar:
+        mes, parcial = hoy[:7], True
+    else:
+        mes, parcial = informe.mes_anterior(hoy), False
+        if hoy[8:10] != "01" or db.get("informe_mes") == mes:
+            return None
+    desde, hasta = informe.limites_mes(mes)
+    btc = None
+    try:
+        k = [x for x in pub.velas("BTCUSDT", "1d", 40) if desde <= int(x[0]) < hasta]
+        if k:
+            btc = float(k[-1][4]) / float(k[0][1]) - 1
+    except Exception:  # noqa: BLE001
+        pass
+    earn = next((o for o in ((db.get("rendimientos") or {}).get("datos") or {}).get("opciones", []) if o.get("id") == "binance_earn"), None)
+    fijo = (earn or {}).get("fijo") or {}
+    inf = informe.armar(db, cfg.publicar.bot_db, mes, ahora, btc, (earn or {}).get("apy"), parcial, fijo.get("extra"), fijo.get("extra_hasta"))
+    inf["texto"] = informe.texto(inf)
+    aviso.enviar(inf["texto"], cabecera="")
+    db.set("informe", limpiar(inf))
+    if not parcial:
+        db.set("informe_mes", mes)
+    return inf
+
+
 def armar(raiz=aj.RAIZ):
     cfg = aj.cargar()
     ll = aj.llaves()
@@ -399,6 +426,10 @@ def main(argv: list[str]) -> int:
             print("Telegram:", "enviado" if aviso.enviar("Prueba de conexión: los avisos de futuros llegan a este chat.") else "FALLÓ")
         return 0
     bot = BotFuturos(cfg, db, pub, cuenta, aviso)
+    if "--informe" in argv:   # informe del mes en curso, a pedido
+        inf = informe_mensual(cfg, db, pub, aviso, bot.ahora, bot.hoy, forzar=True)
+        print(inf["texto"])
+        return 0
     t0 = time.time()
     try:
         bot.correr()
@@ -427,6 +458,11 @@ def main(argv: list[str]) -> int:
         except Exception:  # noqa: BLE001
             pass
     estado["rendimientos"] = (r or {}).get("datos")
+    try:
+        informe_mensual(cfg, db, pub, aviso, bot.ahora, bot.hoy)
+    except Exception as e:  # noqa: BLE001
+        db.evento(f"No pude armar el informe mensual: {type(e).__name__}: {e}", "aviso")
+    estado["informe"] = {k: v for k, v in (db.get("informe") or {}).items() if k != "texto"} or None
     try:
         respaldar(db, raiz, aviso, bot.hoy)
     except Exception as e:  # noqa: BLE001 - un respaldo fallido se registra, no detiene nada

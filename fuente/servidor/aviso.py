@@ -16,13 +16,13 @@ class Aviso:
     def activo(self) -> bool:
         return bool(self.token and self.chat)
 
-    def enviar(self, texto: str) -> bool:
+    def enviar(self, texto: str, cabecera: str | None = None) -> bool:
         self.enviados.append(texto)
         if not self.activo:
             return False
         try:
             r = httpx.post(f"https://api.telegram.org/bot{self.token}/sendMessage", timeout=20,
-                           data={"chat_id": self.chat, "text": f"{CABECERA.get(self.modo, '🔷 FUTUROS')}\n{texto}", "parse_mode": "HTML",
+                           data={"chat_id": self.chat, "text": f"{cabecera}\n{texto}" if cabecera else (texto if cabecera == "" else f"{CABECERA.get(self.modo, '🔷 FUTUROS')}\n{texto}"), "parse_mode": "HTML",
                                  "disable_web_page_preview": "true"})
             return r.status_code == 200
         except httpx.HTTPError:

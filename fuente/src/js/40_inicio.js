@@ -23,6 +23,7 @@ App.registrar({
             <h3>${t}</h3><p class="small mute">${d}</p><div id="i-${id}-sp" class="spark" data-color="${color}"></div>
             <div style="margin-top:auto"><b id="i-${id}-a" style="font-size:17px;letter-spacing:-.01em"></b><div id="i-${id}-b" class="tiny mute"></div></div></div>`).join("")}
       </div></section>
+      <section><h2>Camino a dinero real</h2><div id="i-inf"></div></section>
       <section><div class="grid split">
         <div class="card"><h3>Últimas novedades</h3><p class="sub">Lo que hicieron los bots (se actualiza cada 15 minutos).</p><div id="i-feed" style="margin-top:6px"></div></div>
         <div class="card"><h3>Qué esperar de cada uno</h3><p class="sub">Medido con datos de 2020 a 2026; el pasado no garantiza el futuro.</p>
@@ -86,6 +87,17 @@ App.registrar({
     if (bot && bot.curva) App.spark($("#i-trading-sp"), App.sparkDatos(bot.curva.slice(-120)), "#4f8cff");
     if (fut && fut.curva) App.spark($("#i-futuros-sp"), App.sparkDatos(fut.curva.slice(-200)), "#8b5cf6");
     const op = App.rendimientos.mejor(); if (op && op.serie && op.serie.length > 1) App.spark($("#i-rendimientos-sp"), op.serie.map(([m, v], i) => ({ time: Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1, 1) / 1000, value: 100 * v })), "#2dd4bf");
+    // camino a dinero real (del informe mensual)
+    const inf = E.d && E.d.informe;
+    App.html($("#i-inf"), !inf || !inf.bots ? '<div class="card"><p class="small mute">El primer informe mensual llega el 1 del próximo mes por Telegram (chat de futuros) y aparece aquí: compara cada bot con lo esperado y dice si ya se puede considerar dinero real.</p></div>'
+      : `<p class="small mute" style="margin:-4px 0 10px">Informe ${inf.parcial ? "parcial" : "mensual"} de ${App.esc(inf.nombre)}. Se necesitan al menos 3 meses de prueba; la decisión siempre es tuya y empieza con poco.</p>
+        <div class="grid g2">${Object.entries(inf.bots).map(([k, b]) => `<div class="card"><div class="row between"><h3>${k === "trading" ? "Bot de trading" : "Bot de futuros"}</h3>
+          <span class="chip ${b.listo ? "ok" : "warn"}"><i></i>${b.listo ? "Listo para considerar" : "Seguir en demo"}</span></div>
+          <div class="row" style="gap:18px;margin:10px 0"><div><div class="tiny mute">Mes</div><b class="num ${b.mes && b.mes.ret >= 0 ? "up" : "down"}">${b.mes ? f.pct(b.mes.ret, 2) : "—"}</b></div>
+            <div><div class="tiny mute">Desde que empezó</div><b class="num ${b.total && b.total.ret >= 0 ? "up" : "down"}">${b.total ? f.pct(b.total.ret, 2) : "—"}</b></div>
+            <div><div class="tiny mute">Peor caída</div><b class="num">${b.total ? f.pct(-b.total.caida, 1) : "—"}</b></div></div>
+          <ul class="clean small">${b.lista.map(([ok, t]) => `<li style="list-style:none;margin-left:-18px">${ok === true ? "✅" : ok === false ? "❌" : "⏳"} ${App.esc(t)}</li>`).join("")}</ul>
+          <div class="note ${b.listo ? "good" : "info"} small" style="margin-top:10px">${App.esc(b.veredicto)}</div></div>`).join("")}</div>`);
     // novedades
     const feed = [...((fut && fut.eventos) || []).map(e => ({ ...e, texto: "Futuros · " + e.texto.split(String.fromCharCode(10))[0] })), ...((bot && bot.eventos) || []).map(e => ({ ...e, nivel: "bot", texto: "Trading · " + e.texto }))]
       .sort((a, b) => b.t - a.t).slice(0, 8);
