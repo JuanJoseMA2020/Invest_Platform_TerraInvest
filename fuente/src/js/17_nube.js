@@ -72,7 +72,7 @@ App.nube = {
       this.aplicar(unido);
       this.estado = "ok"; this.error = null; this.ultimo = Date.now();
       if (JSON.stringify(unido) !== JSON.stringify({ senales: remoto && remoto.senales, futuros: remoto && remoto.futuros })) this.programar(500);
-    } catch (e) { this.estado = "error"; this.error = e.message; }
+    } catch (e) { this.estado = "error"; this.error = e.message; this.llaveMala = e.status === 401 || e.status === 403; }
     App.pintarTodo(); this.pintar();
   },
 
@@ -92,6 +92,7 @@ App.nube = {
   cambio(k) { if (this.token && this.CLAVES.includes(k)) this.programar(); },
 
   async conectar(token) {
+    this.llaveMala = false;
     App.store.set("nube_token", token.trim()); App.store.set("nube_gist", "");
     this.estado = "conectando"; this.pintar();
     await this.bajar();
@@ -120,7 +121,7 @@ App.nube = {
     this.abierta = true;
     let v = document.getElementById("nube-v");
     if (!v) { v = document.createElement("div"); v.id = "nube-v"; v.className = "modal"; document.body.appendChild(v); v.addEventListener("click", e => this.clic(e)); }
-    const con = !!this.token;
+    const con = !!this.token && !(this.estado === "error" && this.llaveMala);   // llave borrada o sin permiso: se pide otra
     v.innerHTML = `<div class="card dlg"><div class="row between"><h3>Guardar tus datos en la nube</h3><button class="btn sm ghost" data-x>Cerrar</button></div>
       <p class="sub" style="margin-top:6px">El marcador de señales y el simulador se guardan en una nota <b>privada</b> de tu cuenta de GitHub. Así ves lo mismo en el PC y en el celular, y no se pierde nada si el navegador se borra. Lo de los bots no necesita esto: siempre viene del servidor.</p>
       ${con ? `<div class="note ${this.estado === "error" ? "bad" : "good"} small" style="margin-top:12px">${this.estado === "error" ? App.esc(this.error) : "Conectado. Última sincronización " + App.fmt.hace(this.ultimo) + "."}</div>
@@ -131,6 +132,7 @@ App.nube = {
           <li><div>Entra a <a href="https://github.com/settings/tokens/new?scopes=gist&description=TerraInvest%20datos" target="_blank" rel="noopener">github.com › Settings › Developer settings › Tokens (classic) › Generate new token (classic)</a>. El enlace ya deja todo listo.</div></li>
           <li><div>Revisa: nombre <b>TerraInvest datos</b>, vencimiento <b>No expiration</b> (o el más largo) y marcada <b>solo</b> la casilla <b>gist</b>. Ninguna otra.</div></li>
           <li><div>Baja y pulsa <b>Generate token</b>. Copia la llave (empieza por <b>ghp_</b>) y pégala aquí, solo en esta página, nunca en un chat.</div></li></ol>
+        ${this.token ? `<div class="note bad small" style="margin-top:12px">${App.esc(this.error || "")} Crea una llave nueva y pégala abajo.</div>` : ""}
         <div class="row" style="margin-top:14px"><label class="field grow">Llave de GitHub<input id="nube-tok" type="password" autocomplete="off" placeholder="ghp_…" style="width:100%"></label><button class="btn pri" data-on style="align-self:flex-end">Conectar</button></div>`}</div>`;
     if (con && window.qrcode) { const q = qrcode(0, "M"); q.addData(this.enlace()); q.make(); document.getElementById("nube-qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); }
   },
