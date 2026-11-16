@@ -12,10 +12,12 @@ App.nube = {
     const r = await fetch(this.API + ruta, { method: metodo, cache: "no-store",
       headers: { Authorization: "Bearer " + this.token, Accept: "application/vnd.github+json", ...(cuerpo ? { "Content-Type": "application/json" } : {}) },
       body: cuerpo ? JSON.stringify(cuerpo) : undefined });
-    if (r.status === 401) throw new Error("La llave de GitHub no sirve o venció");
-    if (r.status === 403 || r.status === 404) throw new Error("La llave no tiene permiso de Gists");
-    if (!r.ok) throw new Error("GitHub respondió " + r.status);
-    return r.json();
+    if (r.ok) return r.json();
+    let msg = ""; try { msg = (await r.json()).message || ""; } catch (e) { /* sin detalle */ }
+    const err = new Error(r.status === 401 ? "La llave de GitHub no sirve o venció (revisa que la copiaste completa)"
+      : (r.status === 403 || r.status === 404) ? `GitHub no dio permiso (${r.status}${msg ? ": " + msg : ""}). La llave necesita la casilla «gist».`
+      : `GitHub respondió ${r.status}${msg ? ": " + msg : ""}`);
+    err.status = r.status; throw err;
   },
 
   local() { const d = {}; this.CLAVES.forEach(k => { d[k] = App.store.get(k, null); }); return d; },
@@ -58,7 +60,12 @@ App.nube = {
   async bajar() {
     if (!this.token) return;
     try {
-      const id = await this.buscarGist(), g = await this.pedir("GET", "/gists/" + id), f = g.files[this.ARCHIVO];
+      let id = await this.buscarGist(), g;
+      try { g = await this.pedir("GET", "/gists/" + id); } catch (e) {   // la nota guardada ya no existe: se busca o crea otra
+        if (e.status !== 404) throw e;
+        App.store.set("nube_gist", ""); id = await this.buscarGist(); g = await this.pedir("GET", "/gists/" + id);
+      }
+      const f = g.files[this.ARCHIVO];
       let remoto = null;
       if (f) remoto = JSON.parse(f.truncated ? await (await fetch(f.raw_url)).text() : f.content);
       const unido = this.unir(this.local(), remoto);
@@ -121,10 +128,10 @@ App.nube = {
         <div class="row" style="margin-top:10px;align-items:flex-start"><div id="nube-qr" class="qr"></div><p class="tiny faint" style="max-width:260px">El código lleva tu llave de GitHub: no le tomes foto ni lo compartas. Solo sirve para leer y escribir tus notas privadas.</p></div>
         <div class="row" style="margin-top:14px"><button class="btn sm" data-sync>Sincronizar ahora</button><button class="btn sm ghost" data-off>Desconectar este dispositivo</button></div>`
       : `<ol class="steps" style="margin-top:14px">
-          <li><div>Entra a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com › Settings › Developer settings › Fine-grained tokens › Generate new token</a>.</div></li>
-          <li><div>Nombre: <b>TerraInvest datos</b>. Vencimiento: el más largo que te deje. En <b>Permissions › Account</b>, busca <b>Gists</b> y elige <b>Read and write</b>. Nada más.</div></li>
-          <li><div>Pulsa <b>Generate token</b>, copia la llave y pégala aquí (solo en esta página, nunca en un chat).</div></li></ol>
-        <div class="row" style="margin-top:14px"><label class="field grow">Llave de GitHub<input id="nube-tok" type="password" autocomplete="off" placeholder="github_pat_…" style="width:100%"></label><button class="btn pri" data-on style="align-self:flex-end">Conectar</button></div>`}</div>`;
+          <li><div>Entra a <a href="https://github.com/settings/tokens/new?scopes=gist&description=TerraInvest%20datos" target="_blank" rel="noopener">github.com › Settings › Developer settings › Tokens (classic) › Generate new token (classic)</a>. El enlace ya deja todo listo.</div></li>
+          <li><div>Revisa: nombre <b>TerraInvest datos</b>, vencimiento <b>No expiration</b> (o el más largo) y marcada <b>solo</b> la casilla <b>gist</b>. Ninguna otra.</div></li>
+          <li><div>Baja y pulsa <b>Generate token</b>. Copia la llave (empieza por <b>ghp_</b>) y pégala aquí, solo en esta página, nunca en un chat.</div></li></ol>
+        <div class="row" style="margin-top:14px"><label class="field grow">Llave de GitHub<input id="nube-tok" type="password" autocomplete="off" placeholder="ghp_…" style="width:100%"></label><button class="btn pri" data-on style="align-self:flex-end">Conectar</button></div>`}</div>`;
     if (con && window.qrcode) { const q = qrcode(0, "M"); q.addData(this.enlace()); q.make(); document.getElementById("nube-qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); }
   },
   clic(e) {
