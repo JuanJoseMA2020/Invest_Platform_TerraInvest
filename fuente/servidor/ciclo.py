@@ -40,7 +40,9 @@ def limpiar(x):
 
 
 def num(x: float, d: int = 2) -> str:
-    return f"{x:,.{d}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    if abs(x) < 0.5 * 10 ** -d:
+        x = 0.0
+    return f"{x:,.{d}f}".replace(",", "X").replace(".", ",").replace("X", ".").replace("-", "−")
 
 
 def precio_txt(x: float) -> str:
@@ -286,11 +288,11 @@ class BotFuturos:
         e, capital = self.patrimonio(), self.db.get("capital", self.f.capital)
         abiertas = self.abiertas()
         lineas = [f"📋 <b>Resumen del día</b>",
-                  f"Patrimonio {num(e)} USDT ({'+' if e >= capital else '−'}{num(abs(100 * (e / capital - 1)), 2)} % desde el inicio)",
+                  f"Patrimonio {num(e)} USDT ({'+' if e >= capital else ''}{num(100 * (e / capital - 1), 2)} % desde el inicio)",
                   f"Mercado: Bitcoin {'sobre' if btc['alcista'] else 'bajo'} su media de {self.f.filtro_dias} días "
                   f"({num(100 * btc['distancia'], 1)} %) → {'solo largos' if btc['alcista'] else 'solo cortos'}"]
         if abiertas:
-            lineas.append("Abiertas: " + ", ".join(f"{o['sym'][:-4]} {'↑' if o['lado'] > 0 else '↓'} {'+' if self.no_realizado(o) >= 0 else '−'}{num(abs(self.no_realizado(o)))}" for o in abiertas))
+            lineas.append("Abiertas: " + ", ".join(f"{o['sym'][:-4]} {'↑' if o['lado'] > 0 else '↓'} {'+' if self.no_realizado(o) > 0 else ''}{num(self.no_realizado(o))}" for o in abiertas))
         else:
             lineas.append("Sin posiciones abiertas.")
         self.aviso.enviar("\n".join(lineas))
@@ -341,6 +343,20 @@ class BotFuturos:
                                                        "universo", "freno_diario", "freno_semanal", "freno_total", "max_posiciones")},
             "cuenta": self.cuenta.cuenta() if self.modo == "demo" else None,
         }
+
+
+def respaldar(db: Almacen, raiz, aviso: Aviso, hoy: str, guardar: int = 7) -> None:
+    """Una copia diaria de la base en ~/plataforma/datos/copias (se guardan 7) y, los lunes, una al chat de Telegram de
+    futuros (asi tambien queda fuera del servidor)."""
+    if db.get("copia_dia") == hoy:
+        return
+    carpeta = raiz / "datos" / "copias"
+    ruta = db.copia(carpeta / f"futuros_{hoy}.db")
+    for viejo in sorted(carpeta.glob("futuros_*.db"))[:-guardar]:
+        viejo.unlink()
+    db.set("copia_dia", hoy)
+    if datetime.strptime(hoy, "%Y-%m-%d").weekday() == 0 and aviso.activo:
+        aviso.enviar_archivo(ruta, f"Copia semanal de la base del bot de futuros ({hoy}). Guárdala; no hay que hacer nada más.")
 
 
 def armar(raiz=aj.RAIZ):
@@ -411,6 +427,10 @@ def main(argv: list[str]) -> int:
         except Exception:  # noqa: BLE001
             pass
     estado["rendimientos"] = (r or {}).get("datos")
+    try:
+        respaldar(db, raiz, aviso, bot.hoy)
+    except Exception as e:  # noqa: BLE001 - un respaldo fallido se registra, no detiene nada
+        db.evento(f"No pude hacer la copia de la base: {e}", "aviso")
     fallo = publicar.publicar(limpiar(estado), raiz / "publicacion", cfg.publicar.repositorio, cfg.publicar.rama, cfg.publicar.llave)
     print(f"Ciclo {cuenta.modo} en {time.time() - t0:.1f} s · publicación: {fallo or 'OK'}")
     return 0

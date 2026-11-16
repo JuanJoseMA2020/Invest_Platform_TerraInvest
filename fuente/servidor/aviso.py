@@ -27,3 +27,14 @@ class Aviso:
             return r.status_code == 200
         except httpx.HTTPError:
             return False
+
+    def enviar_archivo(self, ruta, texto: str) -> bool:
+        if not self.activo:
+            return False
+        try:
+            with open(ruta, "rb") as f:
+                r = httpx.post(f"https://api.telegram.org/bot{self.token}/sendDocument", timeout=60,
+                               data={"chat_id": self.chat, "caption": texto}, files={"document": (ruta.name, f)})
+            return r.status_code == 200
+        except (httpx.HTTPError, OSError):
+            return False

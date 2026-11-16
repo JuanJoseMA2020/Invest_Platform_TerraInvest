@@ -17,9 +17,30 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bot.trend import excluded, pick_universe
-
 DIA = 86_400_000
+
+# Monedas que no se operan (estables, oro, envueltas, apalancadas). Copia de la lista del bot de trading (bot/trend.py) para
+# que este programa no dependa de el; tests/test_plataforma_servidor.py comprueba que sigan iguales.
+EXCLUIDAS = {"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "DAI", "USDP", "USDD", "PYUSD", "USD1", "USDE", "RLUSD", "USDS", "XUSD",
+             "BFUSD", "EUR", "TRY", "BRL", "UST", "USTC", "SUSD", "PAX", "USDSB", "AEUR", "EURI", "GBP", "AUD", "BKRW", "IDRT",
+             "BIDR", "NGN", "RUB", "UAH", "VAI", "BVND", "ZAR", "PLN", "RON", "ARS", "MXN", "COP", "CZK", "JPY", "USDX", "FRAX",
+             "LUSD", "EURS", "USDJ", "USDK", "USDN", "PAXG", "XAUT", "WBTC", "WBETH", "BETH", "BNSOL", "WETH", "STETH"}
+APALANCADAS = ("UP", "DOWN", "BULL", "BEAR")
+
+
+def excluded(base: str) -> bool:
+    return base in EXCLUIDAS or (len(base) > 4 and base.endswith(APALANCADAS))
+
+
+def pick_universe(volume: dict, month_start: pd.Timestamp, n: int, window: int = 60, min_history: int = 120) -> list[str]:
+    """Las n monedas con mas volumen medio diario en los `window` dias anteriores a `month_start` (misma regla que el bot)."""
+    rank = {}
+    for sym, v in volume.items():
+        past = v[v.index < month_start].dropna()
+        if len(past) < min_history or past.index[-1] < month_start - pd.Timedelta(days=3):
+            continue
+        rank[sym] = float(past.iloc[-window:].mean())
+    return sorted(rank, key=rank.get, reverse=True)[:n]
 
 
 def velas_df(raw: list, ahora_ms: int) -> pd.DataFrame:
@@ -93,7 +114,7 @@ def contratos_validos(info: dict) -> dict[str, dict]:
 
 
 def universo(volumenes: dict[str, pd.Series], inicio_mes: pd.Timestamp, n: int, ventana: int, historia: int) -> list[str]:
-    return pick_universe(volumenes, inicio_mes, n, ventana, historia)   # la misma funcion del bot de trading
+    return pick_universe(volumenes, inicio_mes, n, ventana, historia)
 
 
 def objetivo(m: Moneda, btc: dict, en_universo: bool) -> int:

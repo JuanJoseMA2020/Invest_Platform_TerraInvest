@@ -81,6 +81,15 @@ class Almacen:
         self.c.execute("DELETE FROM curva")
         self.c.commit()
 
+    def copia(self, destino: Path) -> Path:
+        """Copia consistente de la base (sirve aunque el bot este escribiendo)."""
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        out = sqlite3.connect(str(destino))
+        with out:
+            self.c.backup(out)
+        out.close()
+        return destino
+
     def evento(self, texto: str, nivel: str = "info") -> None:
         self.c.execute("INSERT INTO eventos VALUES (?,?,?)", (ahora_ms(), nivel, texto))
         self.c.execute("DELETE FROM eventos WHERE t < ?", (ahora_ms() - 120 * 86_400_000,))
