@@ -17,6 +17,12 @@ futuros:
   universo: 10             # las 10 monedas con mas volumen en futuros (ultimos 60 dias), elegidas el dia 1 de cada mes
   ventana_volumen: 60
   historia_min: 120
+  # Cerebro 2 (nov-2026): cobra en escalones para ganar muchas veces y perder pocas
+  tp1_atr: 1.0             # 1.er cobro: cierra tp1_frac de la posicion cuando gana 1 ATR; el resto pasa a stop en la entrada
+  tp1_frac: 0.33
+  tp2_atr: 3.0             # 2.º cobro: cierra la mitad de lo que queda a 3 ATR; el stop asegura +1 ATR
+  tp2_frac: 0.5
+  filtro_mercado: 0.05     # no abre si Bitcoin esta a menos de 5 % de su media de 100 dias (mercado indeciso)
   freno_diario: 0.03       # pierde 3 % en el dia: no abre mas ese dia
   freno_semanal: 0.06      # pierde 6 % en la semana: no abre mas esa semana
   freno_total: 0.30        # cae 30 % desde el maximo: cierra todo y se detiene hasta que el dueño lo reanude

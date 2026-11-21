@@ -137,6 +137,36 @@ class Demo(Publico):
                          closePosition=True, workingType="MARK_PRICE", priceProtect=True)
         return {"orden": r.get("orderId"), "precio": precio}
 
+    def poner_cobro(self, sym: str, lado_orden: str, precio: str, cantidad: str) -> dict:
+        """Toma de ganancia en Binance: cierra `cantidad` (solo reduce) cuando el precio de marca toca `precio`.
+        Queda registrada en Binance, asi cobra en el pico aunque el bot este entre revisiones."""
+        r = self.firmado("POST", "/fapi/v1/algoOrder", algoType="CONDITIONAL", symbol=sym, side=lado_orden, type="TAKE_PROFIT_MARKET",
+                         triggerPrice=precio, quantity=cantidad, reduceOnly=True, workingType="MARK_PRICE", priceProtect=True)
+        return {"algo": r.get("algoId"), "precio": precio, "cantidad": cantidad}
+
+    def condicionales(self, sym: str) -> list[dict]:
+        """Ordenes condicionales abiertas (stops y tomas de ganancia): tipo, precio, cantidad e id para cancelar."""
+        out = []
+        try:
+            for x in self.firmado("GET", "/fapi/v1/openAlgoOrders", symbol=sym):
+                out.append({"algo": x.get("algoId"), "tipo": x.get("orderType", x.get("type")), "precio": float(x.get("triggerPrice") or 0),
+                            "cantidad": float(x.get("quantity") or 0)})
+        except ErrorBinance:
+            pass
+        for x in self.firmado("GET", "/fapi/v1/openOrders", symbol=sym):
+            if x.get("type") in ("STOP_MARKET", "TAKE_PROFIT_MARKET"):
+                out.append({"orden": x["orderId"], "tipo": x["type"], "precio": float(x.get("stopPrice") or 0), "cantidad": float(x.get("origQty") or 0)})
+        return out
+
+    def cancelar(self, sym: str, o: dict) -> None:
+        try:
+            if o.get("algo"):
+                self.firmado("DELETE", "/fapi/v1/algoOrder", algoId=o["algo"])
+            else:
+                self.firmado("DELETE", "/fapi/v1/order", symbol=sym, orderId=o["orden"])
+        except ErrorBinance:
+            pass
+
     def stops(self, sym: str) -> list[dict]:
         out = []
         try:
@@ -149,11 +179,6 @@ class Demo(Publico):
         return out
 
     def quitar_stops(self, sym: str) -> None:
-        for s in self.stops(sym):
-            try:
-                if s.get("algo"):
-                    self.firmado("DELETE", "/fapi/v1/algoOrder", algoId=s["algo"])
-                else:
-                    self.firmado("DELETE", "/fapi/v1/order", symbol=sym, orderId=s["orden"])
-            except ErrorBinance:
-                pass
+        """Cancela todas las ordenes condicionales de la moneda (stop y tomas de ganancia)."""
+        for o in self.condicionales(sym):
+            self.cancelar(sym, o)

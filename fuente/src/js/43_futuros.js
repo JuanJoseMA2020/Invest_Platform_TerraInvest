@@ -89,19 +89,23 @@ App.registrar({
           <div class="card"><div class="row between"><h3>Patrimonio del bot</h3><span class="tiny faint" id="fb-desde"></span></div><div id="fb-curva" class="chart md" style="margin-top:10px"></div></div>
           <div class="card"><h3>Cómo decide</h3>
             <ul class="clean small" style="margin-top:10px">
-              <li>Una vez al día, al cerrar la vela diaria (7:00 p. m. de Colombia).</li>
-              <li><b>Bitcoin sobre su media de 100 días → solo largos:</b> entra si la moneda cierra sobre su máximo de 20 días; sale si cierra bajo su mínimo de 10.</li>
-              <li><b>Bitcoin bajo esa media → solo cortos:</b> entra si cierra bajo su mínimo de 20 días; sale si cierra sobre su máximo de 10.</li>
-              <li>Arriesga <b>0,75 %</b> del capital por operación, con stop a 3 veces el movimiento diario normal, registrado en Binance.</li>
+              <li><b>Entra</b> una vez al día (7:00 p. m. de Colombia): largos si Bitcoin está más de 5 % sobre su media de 100 días y la moneda rompe su máximo de 20 días; cortos al revés. Si Bitcoin está pegado a su media (mercado indeciso), no abre.</li>
+              <li><b>Cobra en escalones, registrados en Binance:</b> cuando gana 1 vez el movimiento diario normal (ATR) cierra <b>un tercio</b> y el stop pasa a la entrada: lo que queda <b>ya no puede perder</b>. A 3 ATR cobra la <b>mitad del resto</b> y el stop asegura ganancia. Lo último sigue corriendo.</li>
+              <li><b>Sale</b> del resto si la tendencia se rompe (mínimo o máximo de 10 días) o si Bitcoin cruza su media.</li>
+              <li>Arriesga <b>0,75 %</b> del capital por operación, con stop inicial a 3 ATR, registrado en Binance.</li>
               <li>Apalancamiento 2x en margen aislado: la liquidación queda mucho más lejos que el stop.</li>
               <li>Frenos: −3 % en el día o −6 % en la semana no abre más; −30 % desde el máximo cierra todo y se detiene.</li>
             </ul>
             <details class="more"><summary>Qué esperar (estudio 2020–2026)</summary>
-              <table class="table"><tr><td>Desarrollo 2020–2024</td><td class="num up">+33 % al año</td></tr><tr><td>Examen 2025–2026</td><td class="num up">+9 % al año</td></tr>
-              <tr><td>Peor caída</td><td class="num down">−24 %</td></tr><tr><td>Peor año (2025)</td><td class="num down">−3 %</td></tr></table>
-              <p class="tiny mute" style="margin-top:8px">Los cortos casi empatan: sirven para no quedarse quieto cuando el mercado cae, no son la fuente principal de ganancia.</p></details>
+              <table class="table"><tr><th></th><th class="num">Cerebro 1</th><th class="num">Cerebro 2 (hoy)</th></tr>
+              <tr><td>Operaciones con ganancia</td><td class="num">35–39 %</td><td class="num up">65–68 %</td></tr>
+              <tr><td>Peor racha de pérdidas seguidas</td><td class="num">31</td><td class="num up">11</td></tr>
+              <tr><td>Peor caída (examen 2025–26)</td><td class="num">−18 %</td><td class="num up">−9 %</td></tr>
+              <tr><td>Rendimiento examen 2025–26</td><td class="num">+8,7 %</td><td class="num">+7,2 %</td></tr>
+              <tr><td>Rendimiento 2020–2024</td><td class="num">+33 %</td><td class="num">+13 %</td></tr></table>
+              <p class="tiny mute" style="margin-top:8px">El cerebro 2 gana muchas más veces y cae la mitad, a cambio de ceder parte de los movimientos gigantes. Medido con todas las monedas que existieron, comisiones incluidas.</p></details>
           </div></div></section>
-        <section><h2>Posiciones abiertas</h2><div class="card scroll"><table class="table"><thead><tr><th>Moneda</th><th>Apuesta</th><th class="num">Tamaño</th><th class="num">Entrada</th><th class="num">Precio</th><th class="num">Stop</th><th class="num">Liquidación</th><th class="num">Financiación</th><th class="num">Resultado</th></tr></thead><tbody id="fb-open"></tbody></table></div></section>
+        <section><h2>Posiciones abiertas</h2><div class="card scroll"><table class="table"><thead><tr><th>Moneda</th><th>Apuesta</th><th class="num">Tamaño</th><th class="num">Entrada</th><th class="num">Precio</th><th class="num">Stop</th><th>Escalón</th><th class="num">Próximo cobro</th><th class="num">Ya cobrado</th><th class="num">Resultado</th></tr></thead><tbody id="fb-open"></tbody></table></div></section>
         <section><h2>Lo que vigila</h2><div class="card"><p class="small mute" id="fb-btc" style="margin-bottom:8px"></p><div class="scroll"><table class="table"><thead><tr><th>Moneda</th><th class="num">Precio</th><th>Estado</th><th class="num">Entra si cruza</th><th class="num">Sale si cruza</th></tr></thead><tbody id="fb-radar"></tbody></table></div></div></section>
         <section><div class="grid split">
           <div class="card scroll"><h3>Historial</h3><table class="table" style="margin-top:8px"><thead><tr><th>Cierre</th><th>Moneda</th><th>Apuesta</th><th class="num">Entrada → salida</th><th>Motivo</th><th class="num">Resultado</th></tr></thead><tbody id="fb-hist"></tbody></table></div>
@@ -172,7 +176,7 @@ App.registrar({
   pintarBot() {
     const $ = App.$, f = App.fmt, B = App.estado.fut, F = App.futuros;
     if (!B) { App.html($("#fx-chips"), '<div class="note small">El servidor todavía no ha publicado el estado del bot de futuros. Aparece aquí en cuanto corra su primer ciclo.</div>'); return; }
-    const precio = o => F.marcas[o.sym] || o.precio, pnl = o => o.lado * o.cant * (precio(o) - o.p_in) - o.comision - o.financiacion;
+    const precio = o => F.marcas[o.sym] || o.precio, pnl = o => (o.parcial || 0) + o.lado * o.cant * (precio(o) - o.p_in) - o.comision - o.financiacion;
     const abiertas = B.abiertas.map(o => ({ ...o, vivo: precio(o), res: pnl(o) }));
     const eq = B.patrimonio - B.no_realizado + abiertas.reduce((a, o) => a + o.res, 0), r = eq / B.capital - 1;
     const prox = B.proxima_decision;
@@ -191,11 +195,13 @@ App.registrar({
     const firma = App.estado.d.actualizado;
     if (this.curva && firma !== this.firma) { this.firma = firma; this.curva.poner([{ color: "#8b5cf6", area: true, datos: [...B.curva, [Date.now(), eq]], base: B.capital }]); }
     App.html($("#fb-open"), abiertas.map(o => {
-      const dist = o.stop / o.vivo - 1, pct = o.res / (o.cant * o.p_in);
+      const dist = o.stop / o.vivo - 1, pct = o.res / ((o.cant_ini || o.cant) * o.p_in);
       return `<tr><td>${App.coin(o.sym.slice(0, -4))}</td><td>${o.lado > 0 ? '<span class="tag up">Largo ↑</span>' : '<span class="tag down">Corto ↓</span>'}</td>
         <td class="num">${f.dinero(o.cant * o.p_in)}</td><td class="num">${f.precio(o.p_in)}</td><td class="num">${f.precio(o.vivo)}</td>
-        <td class="num">${f.precio(o.stop)} <span class="faint">${f.pct(dist, 1)}</span></td><td class="num faint">${f.precio(o.liq)}</td>
-        <td class="num ${o.financiacion > 0 ? "down" : "up"}">${f.dinero(-o.financiacion, true)}</td>
+        <td class="num">${f.precio(o.stop)} <span class="faint">${f.pct(dist, 1)}</span></td>
+        <td>${["<span class=\"tag wait\">Esperando</span>", "<span class=\"tag up\">1/3 cobrado · sin riesgo</span>", "<span class=\"tag up\">2 cobros · ganancia asegurada</span>"][o.etapa || 0]}</td>
+        <td class="num">${(o.etapa || 0) >= 2 ? '<span class="faint">corre libre</span>' : `${f.precio((o.etapa || 0) ? o.tp2 : o.tp1)} <span class="faint">${f.pct(((o.etapa || 0) ? o.tp2 : o.tp1) / o.vivo - 1, 1)}</span>`}</td>
+        <td class="num ${(o.parcial || 0) > 0 ? "up" : "faint"}">${o.parcial ? f.dinero(o.parcial, true) : "—"}</td>
         <td class="num ${o.res >= 0 ? "up" : "down"}"><b>${f.dinero(o.res, true)}</b> <span class="faint">${f.pct(pct, 1)}</span></td></tr>`;
     }).join("") || '<tr><td colspan="9" class="empty">Sin posiciones abiertas.</td></tr>');
     const R = B.radar;

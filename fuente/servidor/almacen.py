@@ -28,6 +28,11 @@ class Almacen:
         self.c = sqlite3.connect(str(ruta))
         self.c.row_factory = sqlite3.Row
         self.c.executescript(ESQUEMA)
+        for col, tipo in (("etapa", "INTEGER DEFAULT 0"), ("cant_ini", "REAL"), ("parcial", "REAL DEFAULT 0")):   # cerebro 2
+            try:
+                self.c.execute(f"ALTER TABLE ops ADD COLUMN {col} {tipo}")
+            except sqlite3.OperationalError:
+                pass
 
     # ---- valores sueltos
     def get(self, k: str, defecto=None):

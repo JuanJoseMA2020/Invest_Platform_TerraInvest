@@ -1,7 +1,10 @@
 """Donde se ejecutan las ordenes. Dos versiones con la misma forma:
 
-  Papel  sin llaves: simula con los precios reales de Binance (comision, deslizamiento, stops y financiacion).
-  Demo   con llaves: ordenes de verdad en la cuenta Demo de Binance, con el stop registrado en Binance.
+  Papel  sin llaves: simula con los precios reales de Binance (comision, deslizamiento, stops, cobros y financiacion).
+  Demo   con llaves: ordenes de verdad en la cuenta Demo de Binance; el stop y los cobros quedan registrados en Binance.
+
+Cerebro 2: cada posicion tiene un stop y hasta dos tomas de ganancia parciales. `revisar` devuelve, en orden, lo que se
+ejecuto desde la ultima vez (cobro 1, cobro 2, stop); el bot lo aplica uno por uno.
 """
 from __future__ import annotations
 
@@ -16,6 +19,13 @@ QUINCE_MIN = 900_000
 def texto_num(x: float, paso: float) -> str:
     dec = max(0, -int(math.floor(math.log10(paso)))) if paso < 1 else 0
     return f"{x:.{dec}f}"
+
+
+def _cruzo(lado: int, alto: float, bajo: float, nivel: float, a_favor: bool) -> bool:
+    """¿El precio toco `nivel`? a_favor=True para cobros (arriba en largos), False para stops (abajo en largos)."""
+    if (lado > 0) == a_favor:
+        return alto >= nivel
+    return bajo <= nivel
 
 
 class Papel:
@@ -38,26 +48,43 @@ class Papel:
         p = precio * (1 - op["lado"] * self.desliz)
         return {"p_out": p, "comision": op["cant"] * p * self.com}
 
-    def revisar(self, op: dict, ahora: int, precio: float, posiciones=None) -> dict | None:
-        """¿Toco el stop desde la ultima revision? Mira las velas de 15 minutos y el precio actual."""
+    def _fill(self, tipo, lado, nivel, apertura, q, t, gap_peor):
+        px = (min(apertura, nivel) if lado > 0 else max(apertura, nivel)) if gap_peor else (max(apertura, nivel) if lado > 0 else min(apertura, nivel))
+        px *= 1 - lado * self.desliz
+        return {"tipo": tipo, "p": px, "q": q, "com": q * px * self.com, "t": t}
+
+    def revisar(self, op: dict, ahora: int, precio: float, posiciones=None, nv: dict | None = None, stop_ini: float | None = None) -> list[dict]:
+        """Recorre las velas de 15 minutos desde la ultima revision. En cada vela: primero el stop (lo peor), luego los cobros."""
+        lado = op["lado"]
+        etapa, cant, stop = op.get("etapa") or 0, op["cant"], op["stop"]
+        fills: list[dict] = []
+
+        def paso(o, h, lo, t) -> bool:   # True si la posicion quedo cerrada
+            nonlocal etapa, cant, stop
+            if _cruzo(lado, h, lo, stop, a_favor=False):
+                fills.append(self._fill("stop", lado, stop, o, cant, t, gap_peor=True))
+                return True
+            if nv and etapa == 0 and nv["q1"] > 0 and _cruzo(lado, h, lo, nv["tp1"], a_favor=True):
+                fills.append(self._fill("tp1", lado, nv["tp1"], o, nv["q1"], t, gap_peor=False))
+                cant, etapa, stop = cant - nv["q1"], 1, nv["stop1"]
+            if nv and etapa == 1 and nv["q2"] > 0 and _cruzo(lado, h, lo, nv["tp2"], a_favor=True):
+                fills.append(self._fill("tp2", lado, nv["tp2"], o, nv["q2"], t, gap_peor=False))
+                cant, etapa, stop = cant - nv["q2"], 2, nv["stop2"]
+            return cant <= 1e-12
+
         # se revisan velas completas que empezaron despues de la entrada (la vela de la entrada tiene precios de antes)
         desde = op["ids"].get("rev") or (op["t_in"] // QUINCE_MIN + 1) * QUINCE_MIN
-        lado, stop = op["lado"], op["stop"]
         if desde < ahora:
             for v in self.pub.velas(op["sym"], "15m", 1000, desde):
                 if int(v[0]) < desde or int(v[6]) >= ahora:
                     continue
-                o, h, lo = float(v[1]), float(v[2]), float(v[3])
-                if (lado > 0 and lo <= stop) or (lado < 0 and h >= stop):
-                    px = (min(o, stop) if lado > 0 else max(o, stop)) * (1 - lado * self.desliz)
-                    return {"p_out": px, "comision": op["cant"] * px * self.com, "t_out": int(v[6]), "motivo": "Tocó el stop"}
+                if paso(float(v[1]), float(v[2]), float(v[3]), int(v[6])):
+                    return fills
                 op["ids"]["rev"] = int(v[6]) + 1
-        if (lado > 0 and precio <= stop) or (lado < 0 and precio >= stop):
-            px = precio * (1 - lado * self.desliz)
-            return {"p_out": px, "comision": op["cant"] * px * self.com, "t_out": ahora, "motivo": "Tocó el stop"}
+        paso(precio, precio, precio, ahora)
         if not op["ids"].get("rev"):
             op["ids"]["rev"] = desde
-        return None
+        return fills
 
     def financiacion(self, op: dict, ahora: int) -> float:
         """Lo que la posicion pago (+) o cobro (-) de financiacion desde la ultima vez."""
@@ -68,8 +95,8 @@ class Papel:
                 pagado += op["lado"] * op["cant"] * float(f.get("markPrice") or op["p_in"]) * float(f["fundingRate"])
         return pagado
 
-    def asegurar_stop(self, op: dict, reglas: dict) -> bool:
-        return True
+    def asegurar_ordenes(self, op: dict, reglas: dict, nv: dict, stop: float, precio: float) -> list[dict]:
+        return []   # en papel, los cobros y el stop los vigila `revisar`
 
 
 class DemoCuenta:
@@ -120,43 +147,98 @@ class DemoCuenta:
         except ErrorBinance as e:   # sin stop no se queda abierta: se cierra en el acto
             self.api.mercado(sym, "SELL" if lado > 0 else "BUY", texto_num(q, reglas["paso"]), reducir=True)
             raise RuntimeError(f"No pude registrar el stop en Binance ({e.msg}); cerré la posición de inmediato") from e
-        return {"p_in": p, "cant": q, "comision": com, "ids": {"orden": orden.get("orderId"), **s}}
+        return {"p_in": p, "cant": q, "comision": com, "ids": {"orden": orden.get("orderId"), "ult": t0, **s}}
 
     def cerrar(self, op: dict, precio: float, reglas: dict) -> dict:
         self.api.quitar_stops(op["sym"])
         t0 = self.api_ahora()
         orden = self.api.mercado(op["sym"], "SELL" if op["lado"] > 0 else "BUY", texto_num(op["cant"], reglas["paso"]), reducir=True)
         p, _q, com = self._llenado(op["sym"], orden, t0 - 60_000)
+        op["ids"]["ult"] = self.api_ahora()
         return {"p_out": p, "comision": com}
 
-    def revisar(self, op: dict, ahora: int, precio: float, posiciones: dict | None = None) -> dict | None:
-        """Si Binance ya no tiene la posicion, la cerro el stop: se busca a que precio."""
-        if posiciones is not None and op["sym"] in posiciones:
-            return None
+    def revisar(self, op: dict, ahora: int, precio: float, posiciones: dict | None = None, nv: dict | None = None,
+                stop_ini: float | None = None) -> list[dict]:
+        """Compara lo que Binance tiene abierto con lo que el bot cree tener. Si es menos, se ejecuto un cobro o el stop:
+        se leen las operaciones de cierre (agrupadas por orden) desde la ultima revision."""
+        pos = (posiciones or {}).get(op["sym"])
+        en_binance = abs(float(pos["positionAmt"])) if pos else 0.0
+        if en_binance >= op["cant"] - 1e-12:
+            return []
         lado_cierre = "SELL" if op["lado"] > 0 else "BUY"
-        fills = [t for t in self.api.operaciones(op["sym"], op["t_in"]) if t["side"] == lado_cierre and int(t["time"]) > op["t_in"]]
-        if not fills:
-            return {"p_out": precio, "comision": 0.0, "t_out": ahora, "motivo": "Cerrada fuera del bot"}
-        q = sum(float(t["qty"]) for t in fills)
-        px = sum(float(t["price"]) * float(t["qty"]) for t in fills) / q
-        com = sum(float(t["commission"]) for t in fills if t.get("commissionAsset") == "USDT")
-        return {"p_out": px, "comision": com, "t_out": max(int(t["time"]) for t in fills), "motivo": "Tocó el stop"}
+        desde = int(op["ids"].get("ult") or op["t_in"])
+        ordenes: dict = {}
+        for t in self.api.operaciones(op["sym"], desde):
+            if t["side"] == lado_cierre and int(t["time"]) > desde:
+                g = ordenes.setdefault(t["orderId"], {"q": 0.0, "pq": 0.0, "com": 0.0, "t": 0})
+                g["q"] += float(t["qty"])
+                g["pq"] += float(t["price"]) * float(t["qty"])
+                g["com"] += float(t["commission"]) if t.get("commissionAsset") == "USDT" else 0.0
+                g["t"] = max(g["t"], int(t["time"]))
+        etapa, cant, fills = op.get("etapa") or 0, op["cant"], []
+        for g in sorted(ordenes.values(), key=lambda g: g["t"]):
+            q = min(g["q"], cant)
+            cant -= q
+            tipo = "stop" if cant <= 1e-9 else ("tp1" if etapa == 0 else "tp2")
+            if tipo != "stop":
+                etapa += 1
+            fills.append({"tipo": tipo, "p": g["pq"] / g["q"], "q": q, "com": g["com"], "t": g["t"]})
+            if tipo == "stop":
+                break
+        if not fills and en_binance <= 1e-12:   # cerrada fuera del bot sin operaciones visibles
+            fills.append({"tipo": "fuera", "p": precio, "q": cant, "com": 0.0, "t": ahora})
+        if fills:
+            op["ids"]["ult"] = max(f["t"] for f in fills)
+        return fills
 
     def financiacion(self, op: dict, ahora: int) -> float:
         desde = (op.get("t_fin") or op["t_in"]) + 1
         return -sum(float(x["income"]) for x in self.api.ingresos(op["sym"], "FUNDING_FEE", desde) if int(x["time"]) <= ahora)
 
-    def asegurar_stop(self, op: dict, reglas: dict) -> bool:
-        """Cada posicion debe tener su stop en Binance. Si falta, se vuelve a poner; si no se puede, se cierra."""
-        if self.api.stops(op["sym"]):
-            return True
-        lado = "SELL" if op["lado"] > 0 else "BUY"
-        try:
-            s = self.api.poner_stop(op["sym"], lado, texto_num(op["stop"], reglas["tick"]))
-            op["ids"].update(s)
-            return True
-        except ErrorBinance:
-            return False
+    def asegurar_ordenes(self, op: dict, reglas: dict, nv: dict, stop: float, precio: float) -> list[dict]:
+        """Deja en Binance exactamente lo que toca a la etapa: el stop correcto y los cobros pendientes.
+        Si el precio ya paso un nivel de cobro, cobra en el acto (a mercado). Si el stop no se puede registrar, cierra todo."""
+        sym, lado, tick, paso = op["sym"], op["lado"], reglas["tick"], reglas["paso"]
+        lado_cierre = "SELL" if lado > 0 else "BUY"
+        etapa = op.get("etapa") or 0
+        ordenes = self.api.condicionales(sym)
+        fills = []
+        # 1) cobros pendientes
+        pendientes = [("tp1", nv["tp1"], nv["q1"])] if etapa == 0 else []
+        if etapa <= 1:
+            pendientes.append(("tp2", nv["tp2"], nv["q2"]))
+        pendientes = [x for x in pendientes if x[2] >= reglas.get("min_cant", paso)]
+        for tipo, nivel, q in list(pendientes):
+            if (lado > 0 and precio >= nivel) or (lado < 0 and precio <= nivel):   # ya paso el nivel: se cobra ahora
+                t0 = self.api_ahora()
+                orden = self.api.mercado(sym, lado_cierre, texto_num(q, paso), reducir=True)
+                p, qq, com = self._llenado(sym, orden, t0 - 60_000)
+                fills.append({"tipo": tipo, "p": p, "q": qq, "com": com, "t": self.api_ahora()})
+                op["ids"]["ult"] = self.api_ahora()
+                return fills   # el bot aplica el cobro (nueva etapa y nuevo stop) y vuelve a llamar
+        tps = [o for o in ordenes if o["tipo"] == "TAKE_PROFIT_MARKET"]
+        quiero = sorted((round(nivel / tick) * tick, q) for _t, nivel, q in pendientes)
+        tengo = sorted((round(o["precio"] / tick) * tick, o["cantidad"]) for o in tps)
+        if [(round(a, 10), round(b, 10)) for a, b in quiero] != [(round(a, 10), round(b, 10)) for a, b in tengo]:
+            for o in tps:
+                self.api.cancelar(sym, o)
+            for _t, nivel, q in pendientes:
+                self.api.poner_cobro(sym, lado_cierre, texto_num(nivel, tick), texto_num(q, paso))
+        # 2) stop de la etapa
+        stops = [o for o in ordenes if o["tipo"] == "STOP_MARKET"]
+        if len(stops) != 1 or abs(stops[0]["precio"] - stop) > tick / 2:
+            for o in stops:
+                self.api.cancelar(sym, o)
+            try:
+                op["ids"].update(self.api.poner_stop(sym, lado_cierre, texto_num(stop, tick)))
+            except ErrorBinance:   # sin stop no se queda abierta
+                t0 = self.api_ahora()
+                orden = self.api.mercado(sym, lado_cierre, texto_num(op["cant"], paso), reducir=True)
+                p, qq, com = self._llenado(sym, orden, t0 - 60_000)
+                self.api.quitar_stops(sym)
+                fills.append({"tipo": "stop", "p": p, "q": qq, "com": com, "t": self.api_ahora()})
+                op["ids"]["ult"] = self.api_ahora()
+        return fills
 
     def api_ahora(self) -> int:
         return int(time.time() * 1000) + self.api.offset

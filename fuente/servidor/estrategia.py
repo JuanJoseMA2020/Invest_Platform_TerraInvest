@@ -117,13 +117,38 @@ def universo(volumenes: dict[str, pd.Series], inicio_mes: pd.Timestamp, n: int, 
     return pick_universe(volumenes, inicio_mes, n, ventana, historia)
 
 
-def objetivo(m: Moneda, btc: dict, en_universo: bool) -> int:
-    """+1 largo, -1 corto, 0 fuera."""
+def objetivo(m: Moneda, btc: dict, en_universo: bool, filtro: float = 0.0) -> int:
+    """+1 largo, -1 corto, 0 fuera. Con filtro: no abre si Bitcoin esta a menos de `filtro` de su media (mercado indeciso)."""
     if not en_universo:
         return 0
-    if btc["alcista"]:
+    d = btc.get("distancia", 1.0 if btc["alcista"] else -1.0)
+    if d > filtro:
         return 1 if m.largo else 0
-    return -1 if m.corto else 0
+    if d < -filtro:
+        return -1 if m.corto else 0
+    return 0
+
+
+COSTO_IDA_VUELTA = 0.002   # comisiones + deslizamiento de entrar y salir: el stop "en la entrada" los cubre
+
+
+def niveles(op: dict, tp1_atr: float, tp1_frac: float, tp2_atr: float, tp2_frac: float, paso: float) -> dict:
+    """Cerebro 2: los dos precios de cobro, las cantidades de cada cobro y el stop que corresponde a cada etapa.
+       etapa 0: stop inicial (3 ATR) · etapa 1 (tras cobrar 1.º): stop en la entrada · etapa 2 (tras el 2.º): stop asegura +1 ATR."""
+    e, l, a = op["p_in"], op["lado"], op["atr"]
+    ini = op.get("cant_ini") or op["cant"]
+    q1 = redondear(ini * tp1_frac, paso)
+    q2 = redondear((ini - q1) * tp2_frac, paso)
+    return {"tp1": e + l * tp1_atr * a, "tp2": e + l * tp2_atr * a, "q1": q1, "q2": q2,
+            "stop1": e * (1 + l * COSTO_IDA_VUELTA), "stop2": e + l * tp1_atr * a}
+
+
+def stop_de_etapa(op: dict, nv: dict, stop_inicial: float) -> float:
+    return {0: stop_inicial, 1: nv["stop1"]}.get(op.get("etapa") or 0, nv["stop2"])
+
+
+def motivo_entrada_txt(lado: int) -> str:
+    return "Cobra un tercio al ganar 1 ATR (lo demás ya no puede perder), la mitad del resto a 3 ATR y deja correr lo último."
 
 
 def motivo_entrada(m: Moneda, lado: int, entrada: int, dias: int) -> str:

@@ -18,7 +18,8 @@ MESES_MINIMOS = 3
 # Lo esperado, segun las validaciones (scripts/validar_tendencia.py, scripts/investigacion/futuros.py; nov-2026)
 ESPERADO = {
     "trading": {"nombre": "Bot de trading", "texto": "+7 % a +13 % al año", "bajo": 0.07, "alto": 0.13, "caida": 0.15, "ops_mes": 7},
-    "futuros": {"nombre": "Bot de futuros", "texto": "alrededor de +9 % al año", "bajo": 0.04, "alto": 0.15, "caida": 0.24, "ops_mes": 9},
+    "futuros": {"nombre": "Bot de futuros", "texto": "+7 % a +13 % al año ganando 2 de cada 3 operaciones (cerebro 2)", "bajo": 0.07, "alto": 0.13,
+                "caida": 0.18, "ops_mes": 12},
 }
 
 
@@ -112,7 +113,9 @@ def datos_bot(ruta: Path, desde: int, hasta: int) -> dict | None:
         ops = c.execute("SELECT COUNT(*), COALESCE(SUM(pnl > 0), 0), COALESCE(SUM(pnl), 0) FROM trades WHERE status='closed' AND exit_ts >= ? AND exit_ts < ?",
                         (fecha(max(desde, t0)), fecha(hasta))).fetchone()
         ops_total = c.execute("SELECT COUNT(*) FROM trades WHERE status='closed' AND exit_ts >= ?", (inicio or "1970",)).fetchone()[0]
-        errores = c.execute("SELECT COUNT(*) FROM events WHERE level='ERROR' AND ts >= ? AND ts < ?",
+        # las caidas del servidor de Binance (502, sin red) no son fallos del bot: no cuentan como incidentes
+        errores = c.execute("SELECT COUNT(*) FROM events WHERE level='ERROR' AND ts >= ? AND ts < ? AND message NOT LIKE '%ExchangeNotAvailable%' "
+                            "AND message NOT LIKE '%NetworkError%' AND message NOT LIKE '%RequestTimeout%' AND message NOT LIKE '%Bad Gateway%'",
                             (datetime.fromtimestamp(desde / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), datetime.fromtimestamp(hasta / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))).fetchone()[0]
         riesgo = kv("risk_state") or {}
         return {"puntos": puntos, "aportes": aportes, "t0": t0, "ops": ops[0], "ganadas": int(ops[1]), "pnl": ops[2], "ops_total": ops_total,

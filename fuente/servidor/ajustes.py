@@ -26,6 +26,11 @@ class Futuros:
     universo: int = 10
     ventana_volumen: int = 60
     historia_min: int = 120
+    tp1_atr: float = 1.0
+    tp1_frac: float = 0.33
+    tp2_atr: float = 3.0
+    tp2_frac: float = 0.5
+    filtro_mercado: float = 0.05
     freno_diario: float = 0.03
     freno_semanal: float = 0.06
     freno_total: float = 0.30
@@ -38,6 +43,7 @@ class Futuros:
         assert 0 < self.freno_diario <= 0.03 and 0 < self.freno_semanal <= 0.06 and 0 < self.freno_total <= 0.30, "frenos"
         assert 1 <= self.apalancamiento <= 3, "apalancamiento: maximo 3x"
         assert self.stop_atr > 0 and self.exposicion_max <= 1.0, "sin stop o cuenta apalancada"
+        assert 0 < self.tp1_atr < self.tp2_atr and 0 < self.tp1_frac < 1 and 0 < self.tp2_frac <= 1, "escalones de cobro"
 
 
 @dataclass(frozen=True)

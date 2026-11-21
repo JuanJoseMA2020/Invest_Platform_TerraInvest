@@ -74,8 +74,13 @@ class BotFuturos:
         return self.db.abiertas(self.modo)
 
     def no_realizado(self, op: dict) -> float:
+        """Resultado de la posicion si se cerrara ahora: lo que queda abierto + lo ya cobrado - comisiones - financiacion."""
         m = self.marcas.get(op["sym"], op["p_in"])
-        return op["lado"] * op["cant"] * (m - op["p_in"]) - op["comision"] - op["financiacion"]
+        return (op.get("parcial") or 0.0) + op["lado"] * op["cant"] * (m - op["p_in"]) - op["comision"] - op["financiacion"]
+
+    def niveles(self, op: dict) -> dict:
+        f, r = self.f, self.reglas.get(op["sym"], {"paso": 1e-3})
+        return es.niveles(op, f.tp1_atr, f.tp1_frac, f.tp2_atr, f.tp2_frac, r["paso"])
 
     def patrimonio(self) -> float:
         capital = self.db.get("capital", self.f.capital)
@@ -158,32 +163,83 @@ class BotFuturos:
     # ------------------------------------------------------------------ posiciones
     def revisar_abiertas(self) -> None:
         posiciones = self.cuenta.api.posiciones() if self.modo == "demo" else None
+        if not self.db.get("cerebro2"):
+            self.db.set("cerebro2", self.ahora)
+            self.nota("🧠 <b>Cerebro 2 activado</b>\nAhora cobro en escalones: un tercio al ganar 1 ATR (lo que queda ya no puede perder), "
+                      "la mitad del resto a 3 ATR, y dejo correr lo último. Los cobros quedan registrados en Binance: se ejecutan en el pico "
+                      "aunque yo esté entre revisiones. Las posiciones abiertas pasan a estas reglas desde ya.")
         for op in self.abiertas():
             pos = (posiciones or {}).get(op["sym"])
             if pos and not (op["p_in"] > 0):   # entrada sin precio confirmado: se toma el de Binance
                 op["p_in"], op["cant"] = float(pos["entryPrice"]), abs(float(pos["positionAmt"]))
                 self.db.actualizar(op["id"], p_in=op["p_in"], cant=op["cant"])
                 self.db.evento(f"Corregí la entrada de {op['sym'][:-4]} con el precio de Binance: {precio_txt(op['p_in'])}.", "aviso")
+            if op.get("cant_ini") is None:   # posicion abierta con el cerebro 1: pasa al cerebro 2
+                op["cant_ini"], op["etapa"], op["parcial"] = op["cant"], 0, 0.0
+                op["ids"]["stop_ini"] = op["stop"]
+                self.db.actualizar(op["id"], cant_ini=op["cant"], etapa=0, parcial=0.0, ids=op["ids"])
             pagado = self.cuenta.financiacion(op, self.ahora)
             if pagado:
                 op["financiacion"] += pagado
                 self.db.actualizar(op["id"], financiacion=op["financiacion"], t_fin=self.ahora)
-            r = self.cuenta.revisar(op, self.ahora, self.marcas.get(op["sym"], op["p_in"]), posiciones)
-            if r:
-                self.registrar_cierre(op, r["p_out"], r["comision"], r["motivo"], r["t_out"])
+            marca = self.marcas.get(op["sym"], op["p_in"])
+            nv = self.niveles(op)
+            cerrada = False
+            for f in self.cuenta.revisar(op, self.ahora, marca, posiciones, nv, op["ids"].get("stop_ini", op["stop"])):
+                cerrada = self.aplicar(op, f, nv)
+                if cerrada:
+                    break
+            if cerrada:
                 continue
             self.db.actualizar(op["id"], ids=op["ids"])
-            if not self.cuenta.asegurar_stop(op, self.reglas.get(op["sym"], {})):
-                self.cerrar(op, "No pude asegurar el stop en Binance: cerré por seguridad")
-            else:
+            reglas = self.reglas.get(op["sym"])
+            if not reglas:
+                continue
+            for _ in range(3):   # deja en Binance el stop y los cobros de la etapa; si un cobro se ejecuta, se aplica y se repite
+                fills = self.cuenta.asegurar_ordenes(op, reglas, nv, op["stop"], marca)
+                for f in fills:
+                    cerrada = self.aplicar(op, f, nv)
+                    if cerrada:
+                        break
+                if cerrada or not fills:
+                    break
+            if not cerrada:
                 self.db.actualizar(op["id"], ids=op["ids"])
+
+    def aplicar(self, op: dict, f: dict, nv: dict) -> bool:
+        """Aplica un cobro parcial (nueva etapa y nuevo stop) o el cierre. Devuelve True si la posicion quedo cerrada."""
+        if f["tipo"] in ("stop", "fuera"):
+            motivo = "Tocó el stop" if f["tipo"] == "stop" else "Cerrada fuera del bot"
+            if f["tipo"] == "stop" and (op.get("etapa") or 0) >= 1:
+                motivo = "Tocó el stop protegido (ya había cobrado)"
+            self.registrar_cierre(op, f["p"], f["com"], motivo, f["t"])
+            return True
+        l, base = op["lado"], op["sym"][:-4]
+        bruto = l * f["q"] * (f["p"] - op["p_in"])
+        op["parcial"] = (op.get("parcial") or 0.0) + bruto
+        op["comision"] += f["com"]
+        op["cant"] = max(0.0, op["cant"] - f["q"])
+        op["etapa"] = 1 if f["tipo"] == "tp1" else 2
+        op["stop"] = nv["stop1"] if op["etapa"] == 1 else nv["stop2"]
+        self.db.actualizar(op["id"], parcial=op["parcial"], comision=op["comision"], cant=op["cant"], etapa=op["etapa"],
+                           stop=op["stop"], ids=op["ids"])
+        if op["cant"] <= 1e-12:
+            self.registrar_cierre(op, f["p"], 0.0, "Cobró todo", f["t"])
+            return True
+        neto = bruto - f["com"]
+        detalle = ("Lo que queda ya no puede perder: el stop pasó a la entrada." if op["etapa"] == 1
+                   else f"El stop ahora asegura ganancia ({precio_txt(op['stop'])}). Lo último sigue corriendo.")
+        escalon = "1.er" if op["etapa"] == 1 else "2.º"
+        self.nota(f"💰 Cobré en <b>{base}</b> ({escalon} escalón) · +{num(neto)} USDT\n"
+                  f"Cerré {num(100 * f['q'] / (op.get('cant_ini') or f['q']), 0)} % a {precio_txt(f['p'])} (entrada {precio_txt(op['p_in'])})\n{detalle}")
+        return False
 
     def registrar_cierre(self, op: dict, p_out: float, com_out: float, motivo: str, t_out: int | None = None) -> float:
         com = op["comision"] + com_out
-        pnl = op["lado"] * op["cant"] * (p_out - op["p_in"]) - com - op["financiacion"]
+        pnl = (op.get("parcial") or 0.0) + op["lado"] * op["cant"] * (p_out - op["p_in"]) - com - op["financiacion"]
         self.db.actualizar(op["id"], estado="cerrada", t_out=t_out or self.ahora, p_out=p_out, motivo_out=motivo, comision=com, pnl=pnl)
         base, lado = op["sym"][:-4], "LARGO" if op["lado"] > 0 else "CORTO"
-        pct = pnl / (op["cant"] * op["p_in"])
+        pct = pnl / ((op.get("cant_ini") or op["cant"]) * op["p_in"])
         icono = "✅" if pnl > 0 else "🔻"
         self.nota(f"{icono} Cerré {lado} en <b>{base}</b> · {'+' if pnl >= 0 else '−'}{num(abs(pnl))} USDT ({'+' if pct >= 0 else '−'}{num(abs(100 * pct), 1)} %)\n"
                   f"Entrada {precio_txt(op['p_in'])} → salida {precio_txt(p_out)}\nMotivo: {motivo}\n"
@@ -219,8 +275,18 @@ class BotFuturos:
         except (ErrorBinance, RuntimeError) as ex:
             self.nota(f"⚠️ No pude abrir {m.sym[:-4]}: {getattr(ex, 'msg', None) or ex}", "error")
             return False
-        self.db.abrir(modo=self.modo, sym=m.sym, lado=lado, t_in=self.ahora, p_in=r["p_in"], cant=r["cant"], stop=stop, atr=m.atr,
-                      motivo_in=motivo, comision=r["comision"], financiacion=0.0, t_fin=self.ahora, ids=r["ids"])
+        r["ids"]["stop_ini"] = stop
+        op_id = self.db.abrir(modo=self.modo, sym=m.sym, lado=lado, t_in=self.ahora, p_in=r["p_in"], cant=r["cant"], stop=stop, atr=m.atr,
+                              motivo_in=motivo, comision=r["comision"], financiacion=0.0, t_fin=self.ahora, ids=r["ids"],
+                              cant_ini=r["cant"], etapa=0, parcial=0.0)
+        op = next(o for o in self.abiertas() if o["id"] == op_id)
+        nv = self.niveles(op)
+        try:   # registra en Binance los dos cobros (el stop ya quedo puesto al abrir)
+            for f in self.cuenta.asegurar_ordenes(op, reglas, nv, stop, r["p_in"]):
+                self.aplicar(op, f, nv)
+            self.db.actualizar(op["id"], ids=op["ids"])
+        except ErrorBinance as ex:
+            self.db.evento(f"No pude registrar los cobros de {m.sym[:-4]} ({ex.msg}); lo reintento en el próximo ciclo.", "aviso")
         nominal = r["cant"] * r["p_in"]
         riesgo = r["cant"] * abs(r["p_in"] - stop)
         liq = r["p_in"] * (1 - lado * (1 / self.f.apalancamiento - MANT))
@@ -228,6 +294,7 @@ class BotFuturos:
                   f"({'apuesto a que sube' if lado > 0 else 'apuesto a que baja'})\n"
                   f"Entrada {precio_txt(r['p_in'])} · tamaño {num(nominal)} USDT ({self.f.apalancamiento}x: pongo {num(nominal / self.f.apalancamiento)})\n"
                   f"Stop {precio_txt(stop)} ({num(100 * (stop / r['p_in'] - 1), 1)} %): si lo toca pierdo ~{num(riesgo)} USDT\n"
+                  f"Cobros: 1/3 en {precio_txt(nv['tp1'])} y la mitad del resto en {precio_txt(nv['tp2'])}\n"
                   f"Liquidación {precio_txt(liq)} (lejos del stop)\nPor qué: {motivo}")
         return True
 
@@ -269,7 +336,7 @@ class BotFuturos:
         abiertas = {o["sym"] for o in self.abiertas()}
         for s in uni:
             m = monedas.get(s)
-            lado = es.objetivo(m, btc, True) if m else 0
+            lado = es.objetivo(m, btc, True, f.filtro_mercado) if m else 0
             if not lado or s in abiertas:
                 continue
             if bloqueo:
@@ -281,7 +348,9 @@ class BotFuturos:
                 abiertas.add(s)
         # 3) radar para la pagina y resumen del dia
         self.db.set("radar", {"t": self.ahora, "btc": btc, "universo": uni,
-                              "monedas": [{**monedas[s].dict(), "objetivo": es.objetivo(monedas[s], btc, True)} for s in uni if s in monedas]})
+                              "filtro": f.filtro_mercado,
+                              "monedas": [{**monedas[s].dict(), "objetivo": es.objetivo(monedas[s], btc, True, f.filtro_mercado)}
+                                          for s in uni if s in monedas]})
         self.resumen_dia(btc)
 
     def resumen_dia(self, btc: dict) -> None:
@@ -315,7 +384,9 @@ class BotFuturos:
         apal = self.f.apalancamiento
         abiertas = [{**{k: o[k] for k in ("sym", "lado", "t_in", "p_in", "cant", "stop", "atr", "motivo_in", "comision", "financiacion")},
                      "precio": self.marcas.get(o["sym"]), "pnl": self.no_realizado(o), "tasa": self.tasas.get(o["sym"]),
-                     "liq": o["p_in"] * (1 - o["lado"] * (1 / apal - MANT))} for o in self.abiertas()]
+                     "liq": o["p_in"] * (1 - o["lado"] * (1 / apal - MANT)), "etapa": o.get("etapa") or 0, "parcial": o.get("parcial") or 0.0,
+                     "cant_ini": o.get("cant_ini") or o["cant"], **{k: v for k, v in self.niveles(o).items() if k in ("tp1", "tp2")}}
+                    for o in self.abiertas()]
         cerradas = [{**{k: o[k] for k in ("sym", "lado", "t_in", "p_in", "t_out", "p_out", "motivo_in", "motivo_out", "pnl", "comision", "financiacion")},
                      "pct": o["pnl"] / (o["cant"] * o["p_in"])} for o in self.db.cerradas(self.modo, inicio, 200)]
         gan = [o["pnl"] for o in cerradas if o["pnl"] > 0]
@@ -340,7 +411,8 @@ class BotFuturos:
             "curva": curva, "radar": self.db.get("radar"), "eventos": self.db.eventos(40),
             "telegram": self.aviso.activo,
             "reglas": {k: getattr(self.f, k) for k in ("apalancamiento", "riesgo", "stop_atr", "canal_entrada", "canal_salida", "filtro_dias",
-                                                       "universo", "freno_diario", "freno_semanal", "freno_total", "max_posiciones")},
+                                                       "universo", "freno_diario", "freno_semanal", "freno_total", "max_posiciones",
+                                                       "tp1_atr", "tp1_frac", "tp2_atr", "tp2_frac", "filtro_mercado")},
             "cuenta": self.cuenta.cuenta() if self.modo == "demo" else None,
         }
 
