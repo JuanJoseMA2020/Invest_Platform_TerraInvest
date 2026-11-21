@@ -199,3 +199,80 @@ body.privado .ticker .num{filter:none}
   .top h1{font-size:24px} section{margin-top:26px}
   .table{font-size:13.5px} .table td,.table th{padding:10px 8px}
 }
+
+/* ============================================================ capa visual 2 (nov-2026): moderno y cómodo de leer
+   Profundidad suave, un degradado de marca usado con medida, números en tipografía normal con cifras tabulares. */
+:root{
+  --grad:linear-gradient(135deg,#14b8a6 0%,#3b6cf6 52%,#7c3aed 100%);
+  --glass:rgba(255,255,255,.74); --r:20px;
+  --shadow:0 1px 2px rgba(16,24,40,.04),0 10px 28px -14px rgba(16,24,40,.16);
+  --shadow-lg:0 28px 60px -28px rgba(30,41,90,.35);
+}
+:root[data-theme="dark"]{
+  --glass:rgba(13,17,24,.74);
+  --shadow:0 1px 0 rgba(255,255,255,.04) inset,0 14px 34px -20px rgba(0,0,0,.95);
+  --shadow-lg:0 30px 70px -30px rgba(0,0,0,.95);
+}
+body{background:
+  radial-gradient(1100px 520px at 0% -12%,rgba(59,108,246,.11),transparent 62%),
+  radial-gradient(900px 480px at 100% -6%,rgba(124,58,237,.09),transparent 60%),
+  radial-gradient(900px 460px at 50% 112%,rgba(20,184,166,.07),transparent 60%),var(--bg);background-attachment:fixed}
+.num{font-family:var(--font);font-feature-settings:"tnum" 1,"cv11";letter-spacing:-.01em}
+/* estructura */
+.side{background:var(--glass);backdrop-filter:saturate(1.5) blur(16px)}
+.topbar{background:var(--glass);border-bottom-color:color-mix(in srgb,var(--line) 70%,transparent)}
+.logo{box-shadow:0 10px 24px -10px rgba(59,108,246,.8)}
+.nav{border-radius:12px;padding:10px 12px}
+.nav.on{background:var(--grad);color:#fff;box-shadow:0 10px 22px -12px rgba(59,108,246,.85)}
+.nav.on .pill{color:#fff;background:rgba(255,255,255,.22)}
+.ticker .tk{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:3px 11px}
+.top{margin-bottom:28px}
+.top h1{font-size:32px;font-weight:800;letter-spacing:-.04em}
+.top h1:after{content:"";display:block;width:42px;height:4px;border-radius:99px;background:var(--grad);margin-top:12px}
+.top p{font-size:15.5px;margin-top:12px}
+section{margin-top:36px}
+section>h2{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:750;letter-spacing:-.02em}
+section>h2:before{content:"";width:5px;height:18px;border-radius:3px;background:var(--grad);flex:none}
+/* tarjetas */
+.card{border-radius:var(--r);border-color:color-mix(in srgb,var(--line) 85%,transparent);
+  background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface) 96%,var(--bg)));transition:box-shadow .25s var(--ease),transform .25s var(--ease)}
+.card h3{font-size:16px;font-weight:700;letter-spacing:-.015em}
+.hero,.glow{border:1px solid transparent;background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--grad) border-box;box-shadow:var(--shadow-lg)}
+.kpis .card{position:relative;overflow:hidden;padding:20px 22px}
+.kpis .card:before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--grad);opacity:.9}
+.kpi>span:first-child{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:650}
+.kpi b{font-size:30px;font-weight:780;letter-spacing:-.035em;margin:8px 0 4px}
+.hero .big{font-weight:800}
+.mod{padding:22px}
+.mod:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+.ico{width:44px;height:44px;border-radius:14px}
+.mod .ico{box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 18%,transparent)}
+/* controles */
+.btn{border-radius:12px}
+.btn.pri{background:var(--grad);box-shadow:0 10px 24px -12px rgba(59,108,246,.8)}
+.seg,.tabs{border-radius:14px;padding:4px;background:color-mix(in srgb,var(--surface2) 90%,transparent);border:1px solid var(--line)}
+.seg button,.tabs button{border-radius:10px;padding:8px 15px}
+.field input,.field select{border-radius:12px;padding:10px 12px;font-family:var(--font);font-feature-settings:"tnum" 1}
+/* tablas: más aire y cabeceras discretas */
+.table th{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;padding:12px 14px}
+.table td{padding:14px 14px}
+.table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface2) 45%,transparent)}
+.table tbody tr:hover td{background:var(--acc-bg)}
+.card.scroll{padding:8px 10px}
+.coin i{width:28px;height:28px;font-size:10px;box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
+.tag{padding:3px 10px;font-size:12px}
+.chip{padding:5px 12px}
+.note{border-radius:14px;padding:14px 16px;line-height:1.6}
+.steps li:before{background:var(--grad);color:#fff}
+.feed .it{padding:13px 0}
+.disclaimer{border-top:0;padding-top:0}
+@media (max-width:900px){
+  .side{background:var(--glass)}
+  .nav.on{background:none!important;box-shadow:none;color:var(--accent)}
+  .nav.on:after{content:"";position:absolute;top:2px;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:99px;background:var(--grad)}
+  .top h1{font-size:26px} .kpi b{font-size:23px} .kpis .card{padding:16px}
+  .table td{padding:12px 10px}
+}
+
+.nav .t-sm{display:none}
+@media (max-width:900px){ .nav .t-lg{display:none} .nav .t-sm{display:inline} }

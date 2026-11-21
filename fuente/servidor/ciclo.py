@@ -356,14 +356,24 @@ class BotFuturos:
     def resumen_dia(self, btc: dict) -> None:
         e, capital = self.patrimonio(), self.db.get("capital", self.f.capital)
         abiertas = self.abiertas()
-        lineas = [f"📋 <b>Resumen del día</b>",
+        d, filtro = btc["distancia"], self.f.filtro_mercado
+        modo = "solo largos" if d > filtro else "solo cortos" if d < -filtro else "mercado indeciso: no abro nuevas"
+        lineas = ["📋 <b>Resumen del día</b>",
                   f"Patrimonio {num(e)} USDT ({'+' if e >= capital else ''}{num(100 * (e / capital - 1), 2)} % desde el inicio)",
-                  f"Mercado: Bitcoin {'sobre' if btc['alcista'] else 'bajo'} su media de {self.f.filtro_dias} días "
-                  f"({num(100 * btc['distancia'], 1)} %) → {'solo largos' if btc['alcista'] else 'solo cortos'}"]
+                  f"Mercado: Bitcoin {num(100 * d, 1)} % frente a su media de {self.f.filtro_dias} días → {modo}"]
         if abiertas:
-            lineas.append("Abiertas: " + ", ".join(f"{o['sym'][:-4]} {'↑' if o['lado'] > 0 else '↓'} {'+' if self.no_realizado(o) > 0 else ''}{num(self.no_realizado(o))}" for o in abiertas))
+            etiqueta = {0: "esperando el 1.er cobro", 1: "1/3 cobrado, sin riesgo", 2: "2 cobros, ganancia asegurada"}
+            lineas.append("Abiertas:")
+            for o in abiertas:
+                r = self.no_realizado(o)
+                lineas.append(f"• {o['sym'][:-4]} {'↑' if o['lado'] > 0 else '↓'} {'+' if r > 0 else ''}{num(r)} USDT · "
+                              f"{etiqueta.get(o.get('etapa') or 0, '')}")
         else:
             lineas.append("Sin posiciones abiertas.")
+        hoy0 = (self.ahora // DIA) * DIA
+        cob = [x for x in self.db.eventos(100) if x["t"] >= hoy0 - DIA and x["texto"].startswith("💰")]
+        if cob:
+            lineas.append(f"Cobros en las últimas 24 h: {len(cob)}")
         self.aviso.enviar("\n".join(lineas))
 
     def freno_total(self) -> None:
@@ -417,18 +427,21 @@ class BotFuturos:
         }
 
 
-def respaldar(db: Almacen, raiz, aviso: Aviso, hoy: str, guardar: int = 7, nombre: str = "futuros") -> None:
-    """Una copia diaria de la base en ~/plataforma/datos/copias (se guardan 7) y, los lunes, una al chat de Telegram de
-    futuros (asi tambien queda fuera del servidor)."""
+def respaldar(db: Almacen, raiz, aviso: Aviso, hoy: str, nombre: str = "futuros") -> None:
+    """Sin copias en el servidor (pedido del dueño, 21-nov-2026): los lunes se hace una copia, se envia al chat de
+    Telegram de futuros y se borra en el acto."""
     if db.get("copia_dia") == hoy:
         return
-    carpeta = raiz / "datos" / "copias"
-    ruta = db.copia(carpeta / f"{nombre}_{hoy}.db")
-    for viejo in sorted(carpeta.glob(f"{nombre}_*.db"))[:-guardar]:
-        viejo.unlink()
     db.set("copia_dia", hoy)
-    if datetime.strptime(hoy, "%Y-%m-%d").weekday() == 0 and aviso.activo:
-        aviso.enviar_archivo(ruta, f"Copia semanal de la base del bot de futuros ({hoy}). Guárdala; no hay que hacer nada más.")
+    if datetime.strptime(hoy, "%Y-%m-%d").weekday() != 0 or not aviso.activo:
+        return
+    import tempfile
+    from pathlib import Path
+    ruta = db.copia(Path(tempfile.gettempdir()) / f"{nombre}_{hoy}.db")
+    try:
+        aviso.enviar_archivo(ruta, f"Copia semanal de la base de {nombre} ({hoy}). Guárdala; en el servidor no queda ninguna.")
+    finally:
+        ruta.unlink(missing_ok=True)
 
 
 def informe_mensual(cfg, db: Almacen, pub: Publico, aviso: Aviso, ahora: int, hoy: str, forzar: bool = False) -> dict | None:
@@ -548,7 +561,7 @@ def main(argv: list[str]) -> int:
     estado["informe"] = {k: v for k, v in (db.get("informe") or {}).items() if k != "texto"} or None
     try:
         respaldar(db, raiz, aviso, bot.hoy)
-        respaldar(Almacen(raiz / "datos" / "tesoreria.db"), raiz, Aviso(None, None, "papel"), bot.hoy, nombre="tesoreria")
+        respaldar(Almacen(raiz / "datos" / "tesoreria.db"), raiz, aviso, bot.hoy, nombre="tesoreria")
     except Exception as e:  # noqa: BLE001 - un respaldo fallido se registra, no detiene nada
         db.evento(f"No pude hacer la copia de la base: {e}", "aviso")
     fallo = publicar.publicar(limpiar(estado), raiz / "publicacion", cfg.publicar.repositorio, cfg.publicar.rama, cfg.publicar.llave)

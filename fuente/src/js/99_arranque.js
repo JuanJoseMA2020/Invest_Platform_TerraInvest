@@ -19,7 +19,7 @@ App.bandera = () => {   // aviso global: una señal activa se ve desde cualquier
   nav.innerHTML = App.modulos.map(m => {
     const cab = m.grupo && m.grupo !== grupo ? `<div class="navt">${m.grupo}</div>` : "";
     grupo = m.grupo || grupo;
-    return cab + `<button class="nav" data-id="${m.id}">${App.ico[m.icono]}<span>${m.titulo}</span>${m.nuevo ? '<span class="pill">NUEVO</span>' : ""}</button>`;
+    return cab + `<button class="nav" data-id="${m.id}">${App.ico[m.icono]}<span class="t-lg">${m.titulo}</span><span class="t-sm">${m.corto || m.titulo}</span>${m.nuevo ? '<span class="pill">NUEVO</span>' : ""}</button>`;
   }).join("");
   nav.addEventListener("click", e => { const b = e.target.closest(".nav"); if (b) App.ir(b.dataset.id); });
   document.getElementById("bandera").addEventListener("click", () => App.ir("senales"));

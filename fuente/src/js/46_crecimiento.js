@@ -42,7 +42,7 @@ App.crecimiento = {
 };
 
 App.registrar({
-  id: "crecimiento", titulo: "Crecimiento", icono: "crecimiento", grupo: "Planear", nuevo: true,
+  id: "crecimiento", titulo: "Crecimiento", corto: "Plan", icono: "crecimiento", grupo: "Planear", nuevo: true,
   montar(el) {
     const C = App.crecimiento;
     el.innerHTML = App.cabecera("Crecimiento · plan y mejoras futuras", "Cuánto invertir, tu plan de ahorro y las ideas para hacer crecer el capital, con ejemplos en números. Todo en un solo lugar.", '<span class="chip info"><i></i>Para decidir juntos</span>') + `

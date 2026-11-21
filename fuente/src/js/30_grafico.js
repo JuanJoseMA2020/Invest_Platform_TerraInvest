@@ -35,7 +35,7 @@ App.lineas = (el, opciones) => {
     autoSize: true,
     layout: { background: { color: "transparent" }, textColor: v("--mute"), fontFamily: v("--font"), fontSize: 11.5, attributionLogo: false },
     grid: { vertLines: { visible: false }, horzLines: { color: v("--grid") } },
-    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } }, timeScale: { borderVisible: false, timeVisible: !!o.horas },
+    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } }, timeScale: { borderVisible: false, timeVisible: o.horas !== false },
     crosshair: { mode: 0 }, localization: { locale: "es-CO", priceFormatter: o.formato || (x => x.toLocaleString("es-CO", { maximumFractionDigits: 2 })) },
     handleScroll: false, handleScale: false,
   });
