@@ -137,8 +137,9 @@ def niveles(op: dict, tp1_atr: float, tp1_frac: float, tp2_atr: float, tp2_frac:
        etapa 0: stop inicial (3 ATR) · etapa 1 (tras cobrar 1.º): stop en la entrada · etapa 2 (tras el 2.º): stop asegura +1 ATR."""
     e, l, a = op["p_in"], op["lado"], op["atr"]
     ini = op.get("cant_ini") or op["cant"]
-    q1 = redondear(ini * tp1_frac, paso)
-    q2 = redondear((ini - q1) * tp2_frac, paso)
+    # al paso mas cercano (no siempre hacia abajo: 1,98 -> 2, no 1) y dejando siempre al menos un paso abierto
+    q1 = max(0.0, min(redondear(ini * tp1_frac + paso / 2, paso), redondear(ini - paso, paso)))
+    q2 = max(0.0, min(redondear((ini - q1) * tp2_frac + paso / 2, paso), redondear(ini - q1 - paso, paso)))
     return {"tp1": e + l * tp1_atr * a, "tp2": e + l * tp2_atr * a, "q1": q1, "q2": q2,
             "stop1": e * (1 + l * COSTO_IDA_VUELTA), "stop2": e + l * tp1_atr * a}
 

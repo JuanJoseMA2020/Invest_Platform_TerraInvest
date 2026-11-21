@@ -36,7 +36,7 @@ App.registrar({
       </div></section>
       <p class="disclaimer">TerraInvest es una herramienta personal de estudio y práctica. No es asesoría financiera. Las criptomonedas pueden perder gran parte de su valor; los rendimientos pasados no garantizan los futuros.</p>`;
     el.addEventListener("click", e => { const c = e.target.closest("[data-ir]"); if (c) App.ir(c.dataset.ir); });
-    this.cmp = App.lineas(App.$("#i-cmp", el), { formato: x => (x >= 0 ? "+" : "") + x.toFixed(1) + " %" });
+    this.cmp = App.lineas(App.$("#i-cmp", el), { formato: x => { const d = Math.abs(x) >= 10 ? 0 : Math.abs(x) >= 1 ? 1 : 2; const v = Math.abs(x).toFixed(d); return (+v === 0 ? "" : x > 0 ? "+" : "−") + v.replace(".", ",") + " %"; } });
     this.pintar();
   },
   mostrar() { this.cargarBtc(); },
@@ -59,8 +59,8 @@ App.registrar({
       App.texto($("#i-k1s"), `${f.pct(r, 2)} desde ${f.usdt(base)} · ${bot.abiertas.length} posiciones`);
     }
     if (fut) {
-      const r = fut.patrimonio / fut.capital - 1;
-      App.texto($("#i-k2"), f.usdt(fut.patrimonio)); $("#i-k2").className = "num " + (r >= 0 ? "up" : "down");
+      const eqF = App.futuros.vivoBot(fut).eq, r = eqF / fut.capital - 1;
+      App.texto($("#i-k2"), f.usdt(eqF)); $("#i-k2").className = "num " + (r >= 0 ? "up" : "down");
       App.texto($("#i-k2s"), `${f.pct(r, 2)} desde ${f.usdt(fut.capital)} · ${fut.abiertas.length} posiciones · ${fut.modo === "demo" ? "cuenta demo" : "en papel"}`);
     }
     // comparativa (solo se redibuja si cambian los datos)
@@ -80,7 +80,7 @@ App.registrar({
     const pon = (id, r, cls) => { App.texto($(`#i-${id}-a`), r.texto); App.texto($(`#i-${id}-b`), r.detalle); const t = $(`#i-${id}-tag`); t.className = "chip " + cls[0]; App.html(t, `<i></i>${cls[1]}`); };
     pon("trading", bot ? { texto: f.usdt(bot.patrimonio), detalle: `${bot.totales.n} operaciones cerradas · ${bot.abiertas.length ? bot.abiertas.length + " abiertas" : "en efectivo"}` } : T.resumen(),
         bot && bot.abiertas.length ? ["ok", "Invertido"] : T.listo && !T.btc.sano ? ["warn", "En efectivo"] : ["info", "Vigilando"]);
-    pon("futuros", fut ? { texto: f.usdt(fut.patrimonio), detalle: `${fut.abiertas.filter(o => o.lado > 0).length} largos · ${fut.abiertas.filter(o => o.lado < 0).length} cortos · ${fut.stats.n} cerradas` } : App.futuros.resumen(),
+    pon("futuros", fut ? { texto: f.usdt(App.futuros.vivoBot(fut).eq), detalle: `${fut.abiertas.filter(o => o.lado > 0).length} largos · ${fut.abiertas.filter(o => o.lado < 0).length} cortos · ${fut.stats.n} cerradas` } : App.futuros.resumen(),
         fut ? (fut.pausa ? ["bad", "Detenido"] : ["ok", fut.modo === "demo" ? "Demo" : "Papel"]) : ["", "Sin datos"]);
     const R = App.rendimientos.resumen(); pon("rendimientos", R, ["info", "Tasas en vivo"]);
     const rs = App.senales.resumen(); pon("senales", rs, rs.activa ? ["bad", "Señal activa"] : ["info", "Vigilando"]);

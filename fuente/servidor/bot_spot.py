@@ -2,9 +2,21 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _evento_txt(kind: str, texto: str) -> str:
+    """El arranque del bot se guarda en lenguaje tecnico ("modo=demo equity=100.00"): aqui se dice en simple."""
+    if kind == "startup":
+        m = re.search(r"modo=(\w+)\s+equity=([\d.]+)", texto or "")
+        if m:
+            modo = {"demo": "cuenta demo", "live": "dinero real", "paper": "en papel"}.get(m.group(1), m.group(1))
+            v = f"{float(m.group(2)):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            return f"Bot encendido · {modo} · {v} USDT"
+    return texto or ""
 
 
 def _ms(ts: str | None) -> int | None:
@@ -48,8 +60,8 @@ def resumen(ruta: Path | str) -> dict | None:
         riesgo = _kv(c, "risk_state", {}) or {}
         reloj = _kv(c, "demo_clock", {}) or {}
         uni = _kv(c, "universe_month", {}) or {}
-        eventos = [{"t": _ms(t), "nivel": lv, "texto": m[:240]} for t, lv, m in c.execute(
-            "SELECT ts, level, message FROM events WHERE kind IN ('capital','universo','risk','kill','startup') "   # los errores no se publican (pueden traer rutas)
+        eventos = [{"t": _ms(t), "nivel": lv, "texto": _evento_txt(k, m)[:240]} for t, lv, k, m in c.execute(
+            "SELECT ts, level, kind, message FROM events WHERE kind IN ('capital','universo','risk','kill','startup') "   # los errores no se publican (pueden traer rutas)
             "ORDER BY id DESC LIMIT 15")]
         return {
             "actualizado": _ms(ult[0]) if ult else None,

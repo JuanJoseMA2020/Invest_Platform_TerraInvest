@@ -276,3 +276,6 @@ section>h2:before{content:"";width:5px;height:18px;border-radius:3px;background:
 
 .nav .t-sm{display:none}
 @media (max-width:900px){ .nav .t-lg{display:none} .nav .t-sm{display:inline} }
+
+/* tablas anchas (posiciones de futuros): menos relleno para que quepan sin desplazarse */
+.table.compacta th,.table.compacta td{padding-left:9px;padding-right:9px}

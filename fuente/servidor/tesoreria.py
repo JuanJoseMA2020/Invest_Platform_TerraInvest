@@ -13,6 +13,8 @@ import time
 
 import httpx
 
+from .mensajes import num
+
 AÑO_MS = 365 * 86_400_000
 API = "https://www.binance.com/bapi/earn/v2/friendly/finance-earn/calculator/product/list"
 MOVIMIENTO_MIN = 1.0   # USDT: cambios menores del efectivo no cuentan como compra o venta
@@ -62,9 +64,9 @@ class Tesoreria:
         cambio = caja - s["caja"]
         if abs(cambio) >= MOVIMIENTO_MIN:
             if cambio < 0:
-                self.db.evento(f"El bot usó {-cambio:.2f} USDT para comprar: habría rescatado ese monto de Simple Earn al instante.", "info")
+                self.db.evento(f"El bot usó {num(-cambio)} USDT para comprar: habría rescatado ese monto de Simple Earn al instante.", "info")
             else:
-                self.db.evento(f"El bot liberó {cambio:.2f} USDT al vender: habría vuelto a invertirlos en Simple Earn.", "info")
+                self.db.evento(f"El bot liberó {num(cambio)} USDT al vender: habría vuelto a invertirlos en Simple Earn.", "info")
         s.update(t=ahora, caja=caja, tasa=tasa_efectiva(tasa, caja), base=tasa["base"], tramos=tasa.get("tramos", []))
         self.db.set("estado", s)
 

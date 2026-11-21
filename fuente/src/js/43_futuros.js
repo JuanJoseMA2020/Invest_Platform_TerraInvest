@@ -68,6 +68,13 @@ App.futuros = {
     return { texto: this.S.abiertas.length ? `${this.S.abiertas.length} posición${this.S.abiertas.length > 1 ? "es" : ""} en papel` : (n ? `${App.fmt.dinero(eq - this.S.inicial, true)} en papel` : "Simulador listo"),
              detalle: this.listo && this.mercado.BTCUSDT ? `Financiación BTC ${App.fmt.pct(this.mercado.BTCUSDT.tasa * 3 * 365, 1)} anual` : "Dinero ficticio, precios reales" };
   },
+
+  /** Bot del servidor valorado con el precio de marca de este momento (si ya llego); si no, el ultimo publicado. */
+  vivoBot(B) {
+    const precio = o => this.marcas[o.sym] || o.precio, pnl = o => (o.parcial || 0) + o.lado * o.cant * (precio(o) - o.p_in) - o.comision - o.financiacion;
+    const abiertas = B.abiertas.map(o => ({ ...o, vivo: precio(o), res: pnl(o) }));
+    return { abiertas, eq: B.patrimonio - B.no_realizado + abiertas.reduce((a, o) => a + o.res, 0) };
+  }
 };
 
 App.registrar({
@@ -105,7 +112,7 @@ App.registrar({
               <tr><td>Rendimiento 2020–2024</td><td class="num">+33 %</td><td class="num">+13 %</td></tr></table>
               <p class="tiny mute" style="margin-top:8px">El cerebro 2 gana muchas más veces y cae la mitad, a cambio de ceder parte de los movimientos gigantes. Medido con todas las monedas que existieron, comisiones incluidas.</p></details>
           </div></div></section>
-        <section><h2>Posiciones abiertas</h2><div class="card scroll"><table class="table"><thead><tr><th>Moneda</th><th>Apuesta</th><th class="num">Tamaño</th><th class="num">Entrada</th><th class="num">Precio</th><th class="num">Stop</th><th>Escalón</th><th class="num">Próximo cobro</th><th class="num">Ya cobrado</th><th class="num">Resultado</th></tr></thead><tbody id="fb-open"></tbody></table></div></section>
+        <section><h2>Posiciones abiertas</h2><div class="card scroll"><table class="table compacta"><thead><tr><th>Moneda</th><th>Apuesta</th><th class="num">Tamaño</th><th class="num">Entrada</th><th class="num">Precio</th><th class="num">Stop</th><th>Escalón</th><th class="num">Próximo cobro</th><th class="num">Ya cobrado</th><th class="num">Resultado</th></tr></thead><tbody id="fb-open"></tbody></table></div></section>
         <section><h2>Lo que vigila</h2><div class="card"><p class="small mute" id="fb-btc" style="margin-bottom:8px"></p><div class="scroll"><table class="table"><thead><tr><th>Moneda</th><th class="num">Precio</th><th>Estado</th><th class="num">Entra si cruza</th><th class="num">Sale si cruza</th></tr></thead><tbody id="fb-radar"></tbody></table></div></div></section>
         <section><div class="grid split">
           <div class="card scroll"><h3>Historial</h3><table class="table" style="margin-top:8px"><thead><tr><th>Cierre</th><th>Moneda</th><th>Apuesta</th><th class="num">Entrada → salida</th><th>Motivo</th><th class="num">Resultado</th></tr></thead><tbody id="fb-hist"></tbody></table></div>
@@ -176,9 +183,7 @@ App.registrar({
   pintarBot() {
     const $ = App.$, f = App.fmt, B = App.estado.fut, F = App.futuros;
     if (!B) { App.html($("#fx-chips"), '<div class="note small">El servidor todavía no ha publicado el estado del bot de futuros. Aparece aquí en cuanto corra su primer ciclo.</div>'); return; }
-    const precio = o => F.marcas[o.sym] || o.precio, pnl = o => (o.parcial || 0) + o.lado * o.cant * (precio(o) - o.p_in) - o.comision - o.financiacion;
-    const abiertas = B.abiertas.map(o => ({ ...o, vivo: precio(o), res: pnl(o) }));
-    const eq = B.patrimonio - B.no_realizado + abiertas.reduce((a, o) => a + o.res, 0), r = eq / B.capital - 1;
+    const { abiertas, eq } = F.vivoBot(B), r = eq / B.capital - 1;
     const prox = B.proxima_decision;
     App.html($("#fx-chips"), [
       B.modo === "demo" ? '<span class="chip ok"><i></i>Cuenta demo de Binance</span>' : '<span class="chip info"><i></i>En papel: precios reales, sin cuenta</span>',

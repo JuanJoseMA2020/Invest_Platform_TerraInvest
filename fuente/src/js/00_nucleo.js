@@ -12,15 +12,15 @@ App.store = {
 };
 
 App.fmt = {
-  precio(x) { if (x == null || !isFinite(x)) return "—"; const a = Math.abs(x), d = a >= 100 ? 2 : a >= 1 ? 3 : a >= 0.01 ? 4 : 6; return x.toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d }); },
-  dinero(x, signo) { if (x == null || !isFinite(x)) return "—"; const s = x < 0 ? "−" : (signo && x > 0 ? "+" : ""); return s + "$" + Math.abs(x).toLocaleString("es-CO", Number.isInteger(x) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
-  pct(x, d = 1, signo = true) { if (x == null || !isFinite(x)) return "—"; return (signo && x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(100 * x).toFixed(d).replace(".", ",") + " %"; },
+  precio(x) { if (x == null || !isFinite(x)) return "—"; const a = Math.abs(x), d = a >= 100 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 7; return x.toLocaleString("es-CO", { minimumFractionDigits: Math.min(2, d), maximumFractionDigits: d }); },
+  dinero(x, signo) { if (x == null || !isFinite(x)) return "—"; if (Math.abs(x) < 0.005) x = 0; const s = x < 0 ? "−" : (signo && x > 0 ? "+" : ""); return s + "$" + Math.abs(x).toLocaleString("es-CO", Number.isInteger(x) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+  pct(x, d = 1, signo = true) { if (x == null || !isFinite(x)) return "—"; if (Math.abs(100 * x) < 0.5 * 10 ** -d) x = 0; return (signo && x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(100 * x).toFixed(d).replace(".", ",") + " %"; },
   hora(t) { return new Date(t).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false }); },
   fecha(t) { return new Date(t).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit" }); },
   fechaHora(t) { return t ? this.fecha(t) + " " + this.hora(t) : "—"; },
   dia(t) { return new Date(t).toLocaleDateString("es-CO", { day: "numeric", month: "short" }); },
   hace(t) { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "ahora" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; },
-  usdt(x, signo) { if (x == null || !isFinite(x)) return "—"; const s = x < 0 ? "−" : (signo && x > 0 ? "+" : ""); return s + Math.abs(x).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USDT"; },
+  usdt(x, signo) { if (x == null || !isFinite(x)) return "—"; if (Math.abs(x) < 0.005) x = 0; const s = x < 0 ? "−" : (signo && x > 0 ? "+" : ""); return s + Math.abs(x).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USDT"; },
   falta(ms) { ms = Math.max(0, ms); const m = Math.floor(ms / 60000); return m >= 60 ? Math.floor(m / 60) + " h " + (m % 60) + " min" : this.mmss(ms); },
   mmss(ms) { ms = Math.max(0, ms); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); },
 };
