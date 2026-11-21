@@ -39,15 +39,7 @@ def limpiar(x):
     return x
 
 
-def num(x: float, d: int = 2) -> str:
-    if abs(x) < 0.5 * 10 ** -d:
-        x = 0.0
-    return f"{x:,.{d}f}".replace(",", "X").replace(".", ",").replace("X", ".").replace("-", "−")
-
-
-def precio_txt(x: float) -> str:
-    a = abs(x)
-    return num(x, 2 if a >= 100 else 4 if a >= 1 else 6)
+from .mensajes import con_signo, num, pct, precio_txt, tarjeta  # noqa: E402
 
 
 class BotFuturos:
@@ -131,7 +123,9 @@ class BotFuturos:
             self.db.set(k, v)
         donde = "la cuenta demo de Binance (órdenes de verdad con dinero de práctica)" if self.modo == "demo" else \
             "papel: simulo con los precios reales de Binance, sin cuenta"
-        self.nota(f"Arranqué en {donde}. Capital asignado: {num(capital, 0)} USDT. Decido una vez al día, al cierre de la vela diaria (00:00 UTC, 7:00 p. m. de Colombia).")
+        self.nota(tarjeta("⚙️", "Bot de futuros encendido", f"Capital asignado: <b>{num(capital, 0)} USDT</b>",
+                          [("Dónde", f"<b>{donde}</b>"), ("Decide", "<b>una vez al día</b>, al cierre de la vela diaria (7:00 p. m. de Colombia)"),
+                           ("Vigila", "<b>cada 15 minutos</b> los stops y los cobros")]))
 
     def mercado(self) -> None:
         idx = self.pub.indices()
@@ -165,9 +159,11 @@ class BotFuturos:
         posiciones = self.cuenta.api.posiciones() if self.modo == "demo" else None
         if not self.db.get("cerebro2"):
             self.db.set("cerebro2", self.ahora)
-            self.nota("🧠 <b>Cerebro 2 activado</b>\nAhora cobro en escalones: un tercio al ganar 1 ATR (lo que queda ya no puede perder), "
-                      "la mitad del resto a 3 ATR, y dejo correr lo último. Los cobros quedan registrados en Binance: se ejecutan en el pico "
-                      "aunque yo esté entre revisiones. Las posiciones abiertas pasan a estas reglas desde ya.")
+            self.nota(tarjeta("⚙️", "Cerebro 2 activado", "Cobro en escalones para ganar muchas veces y perder pocas",
+                              [("1.er cobro", "<b>un tercio</b> al ganar 1 ATR; lo que queda <b>ya no puede perder</b>"),
+                               ("2.º cobro", "<b>la mitad del resto</b> a 3 ATR; el stop asegura ganancia"),
+                               ("Lo último", "<b>corre libre</b> hasta que la tendencia se rompa"),
+                               ("Dónde", "los cobros quedan <b>registrados en Binance</b>: se ejecutan en el pico")]))
         for op in self.abiertas():
             pos = (posiciones or {}).get(op["sym"])
             if pos and not (op["p_in"] > 0):   # entrada sin precio confirmado: se toma el de Binance
@@ -227,11 +223,14 @@ class BotFuturos:
             self.registrar_cierre(op, f["p"], 0.0, "Cobró todo", f["t"])
             return True
         neto = bruto - f["com"]
-        detalle = ("Lo que queda ya no puede perder: el stop pasó a la entrada." if op["etapa"] == 1
-                   else f"El stop ahora asegura ganancia ({precio_txt(op['stop'])}). Lo último sigue corriendo.")
         escalon = "1.er" if op["etapa"] == 1 else "2.º"
-        self.nota(f"💰 Cobré en <b>{base}</b> ({escalon} escalón) · +{num(neto)} USDT\n"
-                  f"Cerré {num(100 * f['q'] / (op.get('cant_ini') or f['q']), 0)} % a {precio_txt(f['p'])} (entrada {precio_txt(op['p_in'])})\n{detalle}")
+        filas = [("Cerré", f"<b>{num(100 * f['q'] / (op.get('cant_ini') or f['q']), 0)} %</b> a {precio_txt(f['p'])} (entrada {precio_txt(op['p_in'])})")]
+        if op["etapa"] == 1:
+            filas += [("Lo que queda", "<b>ya no puede perder</b>: stop en la entrada"),
+                      ("Próximo cobro", f"<b>{precio_txt(nv['tp2'])}</b> ({pct(nv['tp2'] / f['p'] - 1)})")]
+        else:
+            filas += [("Lo que queda", f"<b>ganancia asegurada</b>: stop en {precio_txt(op['stop'])}"), ("Después", "corre libre")]
+        self.nota(tarjeta("🔒", f"Cobro · {base} · {con_signo(neto)} USDT", f"{escalon} escalón de {'largo' if l > 0 else 'corto'}", filas))
         return False
 
     def registrar_cierre(self, op: dict, p_out: float, com_out: float, motivo: str, t_out: int | None = None) -> float:
@@ -239,18 +238,24 @@ class BotFuturos:
         pnl = (op.get("parcial") or 0.0) + op["lado"] * op["cant"] * (p_out - op["p_in"]) - com - op["financiacion"]
         self.db.actualizar(op["id"], estado="cerrada", t_out=t_out or self.ahora, p_out=p_out, motivo_out=motivo, comision=com, pnl=pnl)
         base, lado = op["sym"][:-4], "LARGO" if op["lado"] > 0 else "CORTO"
-        pct = pnl / ((op.get("cant_ini") or op["cant"]) * op["p_in"])
+        pct_op = pnl / ((op.get("cant_ini") or op["cant"]) * op["p_in"])
         icono = "✅" if pnl > 0 else "🔻"
-        self.nota(f"{icono} Cerré {lado} en <b>{base}</b> · {'+' if pnl >= 0 else '−'}{num(abs(pnl))} USDT ({'+' if pct >= 0 else '−'}{num(abs(100 * pct), 1)} %)\n"
-                  f"Entrada {precio_txt(op['p_in'])} → salida {precio_txt(p_out)}\nMotivo: {motivo}\n"
-                  f"Patrimonio: {num(self.patrimonio())} USDT")
+        e, capital = self.patrimonio(), self.db.get("capital", self.f.capital)
+        dias = max(0.0, ((t_out or self.ahora) - op["t_in"]) / DIA)
+        filas = [("Entrada → salida", f"<b>{precio_txt(op['p_in'])} → {precio_txt(p_out)}</b>"), ("Motivo", f"<b>{motivo}</b>")]
+        if op.get("parcial"):
+            filas.append(("Incluye cobros previos", f"<b>{con_signo(op['parcial'])} USDT</b>"))
+        filas.append(("Patrimonio", f"<b>{num(e)} USDT</b> ({pct(e / capital - 1, 2)} desde el inicio)"))
+        self.nota(tarjeta(icono, f"Cierre · {base} · {con_signo(pnl)} USDT",
+                          f"<b>{pct(pct_op)}</b> · {lado.lower()} de {num(dias, 1)} días", filas,
+                          [f"Comisiones {num(com)} USDT · financiación {con_signo(-op['financiacion'])} USDT"]))
         return pnl
 
     def cerrar(self, op: dict, motivo: str) -> None:
         try:
             r = self.cuenta.cerrar(op, self.marcas.get(op["sym"], op["p_in"]), self.reglas.get(op["sym"], {"paso": 1e-3, "tick": 1e-4}))
         except ErrorBinance as e:
-            self.nota(f"⚠️ No pude cerrar {op['sym'][:-4]}: {e.msg}. Lo intento en el próximo ciclo.", "error")
+            self.nota(tarjeta("⚠️", f"No pude cerrar {op['sym'][:-4]}", f"Binance respondió: {e.msg}. Lo intento en el próximo ciclo; el stop sigue en Binance."), "error")
             return
         self.registrar_cierre(op, r["p_out"], r["comision"], motivo)
 
@@ -273,7 +278,7 @@ class BotFuturos:
         try:
             r = self.cuenta.abrir(m.sym, lado, cant, stop, reglas, precio, self.f.apalancamiento)
         except (ErrorBinance, RuntimeError) as ex:
-            self.nota(f"⚠️ No pude abrir {m.sym[:-4]}: {getattr(ex, 'msg', None) or ex}", "error")
+            self.nota(tarjeta("⚠️", f"No pude abrir {m.sym[:-4]}", f"Binance respondió: {getattr(ex, 'msg', None) or ex}. Lo reintento en la próxima decisión."), "error")
             return False
         r["ids"]["stop_ini"] = stop
         op_id = self.db.abrir(modo=self.modo, sym=m.sym, lado=lado, t_in=self.ahora, p_in=r["p_in"], cant=r["cant"], stop=stop, atr=m.atr,
@@ -290,12 +295,14 @@ class BotFuturos:
         nominal = r["cant"] * r["p_in"]
         riesgo = r["cant"] * abs(r["p_in"] - stop)
         liq = r["p_in"] * (1 - lado * (1 / self.f.apalancamiento - MANT))
-        self.nota(f"{'🟢' if lado > 0 else '🔴'} Abrí <b>{'LARGO' if lado > 0 else 'CORTO'}</b> en <b>{m.sym[:-4]}</b> "
-                  f"({'apuesto a que sube' if lado > 0 else 'apuesto a que baja'})\n"
-                  f"Entrada {precio_txt(r['p_in'])} · tamaño {num(nominal)} USDT ({self.f.apalancamiento}x: pongo {num(nominal / self.f.apalancamiento)})\n"
-                  f"Stop {precio_txt(stop)} ({num(100 * (stop / r['p_in'] - 1), 1)} %): si lo toca pierdo ~{num(riesgo)} USDT\n"
-                  f"Cobros: 1/3 en {precio_txt(nv['tp1'])} y la mitad del resto en {precio_txt(nv['tp2'])}\n"
-                  f"Liquidación {precio_txt(liq)} (lejos del stop)\nPor qué: {motivo}")
+        p_in = r["p_in"]
+        self.nota(tarjeta("🟢" if lado > 0 else "🔴", f"{'Largo' if lado > 0 else 'Corto'} · {m.sym[:-4]}",
+                          f"{'Apuesto a que sube' if lado > 0 else 'Apuesto a que baja'} · entrada <b>{precio_txt(p_in)}</b>",
+                          [("Tamaño", f"<b>{num(nominal)} USDT</b> (pongo {num(nominal / self.f.apalancamiento)} con {self.f.apalancamiento}x)"),
+                           ("Stop", f"<b>{precio_txt(stop)}</b> ({pct(stop / p_in - 1)}) · si lo toca pierdo ~{num(riesgo)} USDT"),
+                           ("1.er cobro", f"<b>{precio_txt(nv['tp1'])}</b> ({pct(nv['tp1'] / p_in - 1)}) · un tercio"),
+                           ("2.º cobro", f"<b>{precio_txt(nv['tp2'])}</b> ({pct(nv['tp2'] / p_in - 1)}) · la mitad del resto")],
+                          [f"Por qué: {motivo}", f"Liquidación: {precio_txt(liq)} (mucho más lejos que el stop)"]))
         return True
 
     # ------------------------------------------------------------------ decision diaria
@@ -357,24 +364,17 @@ class BotFuturos:
         e, capital = self.patrimonio(), self.db.get("capital", self.f.capital)
         abiertas = self.abiertas()
         d, filtro = btc["distancia"], self.f.filtro_mercado
-        modo = "solo largos" if d > filtro else "solo cortos" if d < -filtro else "mercado indeciso: no abro nuevas"
-        lineas = ["📋 <b>Resumen del día</b>",
-                  f"Patrimonio {num(e)} USDT ({'+' if e >= capital else ''}{num(100 * (e / capital - 1), 2)} % desde el inicio)",
-                  f"Mercado: Bitcoin {num(100 * d, 1)} % frente a su media de {self.f.filtro_dias} días → {modo}"]
-        if abiertas:
-            etiqueta = {0: "esperando el 1.er cobro", 1: "1/3 cobrado, sin riesgo", 2: "2 cobros, ganancia asegurada"}
-            lineas.append("Abiertas:")
-            for o in abiertas:
-                r = self.no_realizado(o)
-                lineas.append(f"• {o['sym'][:-4]} {'↑' if o['lado'] > 0 else '↓'} {'+' if r > 0 else ''}{num(r)} USDT · "
-                              f"{etiqueta.get(o.get('etapa') or 0, '')}")
-        else:
-            lineas.append("Sin posiciones abiertas.")
+        modo = "solo largos" if d > filtro else "solo cortos" if d < -filtro else "indeciso: no abro nuevas"
+        etapas = [o.get("etapa") or 0 for o in abiertas]
         hoy0 = (self.ahora // DIA) * DIA
-        cob = [x for x in self.db.eventos(100) if x["t"] >= hoy0 - DIA and x["texto"].startswith("💰")]
-        if cob:
-            lineas.append(f"Cobros en las últimas 24 h: {len(cob)}")
-        self.aviso.enviar("\n".join(lineas))
+        cobros = sum(1 for x in self.db.eventos(100) if x["t"] >= hoy0 - DIA and "Cobro ·" in x["texto"])
+        filas = [("Mercado", f"<b>{modo}</b> (Bitcoin {pct(d)} frente a su media de {self.f.filtro_dias} días)"),
+                 ("Abiertas", f"<b>{len(abiertas)}</b>" + (f" · {sum(x >= 1 for x in etapas)} ya sin riesgo" if abiertas else "")),
+                 ("Cobros en 24 h", f"<b>{cobros}</b>")]
+        etiqueta = {0: "esperando el 1.er cobro", 1: "1/3 cobrado, sin riesgo", 2: "ganancia asegurada"}
+        detalle = [f"{o['sym'][:-4]} {'↑' if o['lado'] > 0 else '↓'} {con_signo(self.no_realizado(o))} USDT · {etiqueta.get(o.get('etapa') or 0, '')}"
+                   for o in abiertas]
+        self.aviso.enviar(tarjeta("📊", "Resumen del día", f"<b>{num(e)} USDT</b> · {pct(e / capital - 1, 2)} desde el inicio", filas, detalle))
 
     def freno_total(self) -> None:
         e = self.patrimonio()
@@ -384,8 +384,9 @@ class BotFuturos:
             for op in self.abiertas():
                 self.cerrar(op, f"Freno del {int(100 * self.f.freno_total)} %")
             self.db.set("pausa", {"t": self.ahora, "eq": e, "pico": pico})
-            self.nota(f"⛔ Freno del {int(100 * self.f.freno_total)} %: el patrimonio cayó de {num(pico)} a {num(e)} USDT. Cerré todo y me detuve. "
-                      "Para reanudar hay que pedirlo (se revisa antes qué pasó).", "error")
+            self.nota(tarjeta("🛑", f"Freno del {int(100 * self.f.freno_total)} %", "Cerré todo y me detuve para proteger el capital",
+                              [("Patrimonio", f"de <b>{num(pico)}</b> a <b>{num(e)} USDT</b>"),
+                               ("Para reanudar", "hay que pedirlo; antes se revisa qué pasó")]), "error")
 
     # ------------------------------------------------------------------ estado para la pagina
     def estado(self) -> dict:

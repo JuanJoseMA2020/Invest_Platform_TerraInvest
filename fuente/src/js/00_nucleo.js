@@ -47,7 +47,10 @@ App.registrar = mod => App.modulos.push(mod);
 App.COLORES = { BTC: "#f7931a", ETH: "#627eea", SOL: "#14f195", XRP: "#23292f", BNB: "#f3ba2f", DOGE: "#c2a633", ADA: "#0033ad", LINK: "#2a5ada", SUI: "#4da2ff", NEAR: "#00c08b", ZEC: "#ecb244", HYPE: "#50d2c1", UNI: "#ff007a", TRX: "#ff060a" };
 App.coin = base => { const c = App.COLORES[base] || `hsl(${[...base].reduce((a, ch) => a + ch.charCodeAt(0) * 37, 0) % 360} 55% 45%)`; return `<span class="coin"><i style="background:${c}">${App.esc(base.slice(0, 3))}</i>${App.esc(base)}</span>`; };
 App.riesgo = n => `<span class="riesgo r${n}" title="Riesgo ${n} de 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
-App.limpioHtml = s => App.esc(s).replace(/&lt;(\/?)b&gt;/g, "<$1b>");   // los avisos traen negrillas de Telegram
+App.limpioHtml = s => App.esc(s)   // los avisos traen el formato de Telegram: negrilla, cursiva y detalle plegado
+  .replace(/&lt;(\/?)(b|i)&gt;/g, "<$1$2>")
+  .replace(/&lt;blockquote[^&]*&gt;/g, '<span class="faint">').replace(/&lt;\/blockquote&gt;/g, "</span>")
+  .replace(/^──+$/gm, "");
 App.feed = items => items.length ? `<div class="feed">${items.map(e => `<div class="it"><span class="b ${e.nivel || ""}"></span><div class="x">${App.limpioHtml(e.texto)}</div><span class="t">${App.fmt.fechaHora(e.t)}</span></div>`).join("")}</div>` : '<div class="empty">Sin novedades todavía.</div>';
 
 App.ir = id => {

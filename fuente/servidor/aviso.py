@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import httpx
 
-CABECERA = {"demo": "🔷 <b>FUTUROS · cuenta demo</b>", "papel": "🔷 <b>FUTUROS · en papel</b>"}
+PIE = {"demo": "Futuros · cuenta demo", "papel": "Futuros · en papel"}
 
 
 class Aviso:
@@ -22,7 +22,7 @@ class Aviso:
             return False
         try:
             r = httpx.post(f"https://api.telegram.org/bot{self.token}/sendMessage", timeout=20,
-                           data={"chat_id": self.chat, "text": f"{cabecera}\n{texto}" if cabecera else (texto if cabecera == "" else f"{CABECERA.get(self.modo, '🔷 FUTUROS')}\n{texto}"), "parse_mode": "HTML",
+                           data={"chat_id": self.chat, "text": f"{cabecera}\n{texto}" if cabecera else (texto if cabecera == "" else f"{texto}\n<i>{PIE.get(self.modo, 'Futuros')}</i>"), "parse_mode": "HTML",
                                  "disable_web_page_preview": "true"})
             return r.status_code == 200
         except httpx.HTTPError:
