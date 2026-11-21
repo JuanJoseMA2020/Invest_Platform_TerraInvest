@@ -28,8 +28,8 @@ App.registrar({
         <div class="card"><h3>Últimas novedades</h3><p class="sub">Lo que hicieron los bots (se actualiza cada 15 minutos).</p><div id="i-feed" style="margin-top:6px"></div></div>
         <div class="card"><h3>Qué esperar de cada uno</h3><p class="sub">Medido con datos de 2020 a 2026; el pasado no garantiza el futuro.</p>
           <table class="table" style="margin-top:8px"><tbody>
-            <tr><td>Bot de trading</td><td class="wrap small">Entre <b>+7 % y +13 %</b> al año, con caídas de hasta ~15 %.</td></tr>
-            <tr><td>Bot de futuros</td><td class="wrap small">Examen 2025-26: <b>+9 %</b> al año, caídas de hasta ~17 %. Gana también cuando el mercado baja.</td></tr>
+            <tr><td>Bot de trading</td><td class="wrap small">Gana <b>6 de cada 10</b> operaciones; <b>+4 % a +9 %</b> al año, caídas de hasta ~12 %.</td></tr>
+            <tr><td>Bot de futuros</td><td class="wrap small">Gana <b>2 de cada 3</b> operaciones; <b>+7 %</b> al año en 2025-26, caídas de hasta ~9 %. Gana también cuando el mercado baja.</td></tr>
             <tr><td>Rendimientos</td><td class="wrap small"><b>3 % a 5 %</b> al año en dólares digitales; riesgo bajo pero no cero.</td></tr>
             <tr><td>Señales</td><td class="wrap small">En prueba: necesitan acertar más del <b>55,6 %</b> para ganar.</td></tr></tbody></table>
           <div class="note info small" style="margin-top:12px">Todo corre en <b>cuentas de práctica</b>. Pasar a dinero real es una decisión tuya, después de ver resultados aquí.</div></div>

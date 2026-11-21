@@ -17,7 +17,8 @@ MESES_MINIMOS = 3
 
 # Lo esperado, segun las validaciones (scripts/validar_tendencia.py, scripts/investigacion/futuros.py; nov-2026)
 ESPERADO = {
-    "trading": {"nombre": "Bot de trading", "texto": "+7 % a +13 % al año", "bajo": 0.07, "alto": 0.13, "caida": 0.15, "ops_mes": 7},
+    "trading": {"nombre": "Bot de trading", "texto": "+4 % a +9 % al año ganando 6 de cada 10 operaciones (cerebro 2)", "bajo": 0.04,
+                "alto": 0.09, "caida": 0.12, "ops_mes": 6},
     "futuros": {"nombre": "Bot de futuros", "texto": "+7 % a +13 % al año ganando 2 de cada 3 operaciones (cerebro 2)", "bajo": 0.07, "alto": 0.13,
                 "caida": 0.18, "ops_mes": 12},
 }

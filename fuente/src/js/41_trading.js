@@ -82,6 +82,7 @@ App.registrar({
             <li><b>Compra</b> cuando la moneda cierra sobre su máximo de ${c.canal_in} días y Bitcoin está sobre su media de ${c.gate_dias} días.</li>
             <li><b>Vende</b> cuando cierra bajo su mínimo de ${c.canal_out} días, o si Bitcoin pierde esa media.</li>
             <li><b>Stop</b> inicial a ${c.stop_atr} veces el movimiento diario normal, registrado en Binance.</li>
+            <li><b>Cerebro 2:</b> al ganar 1 vez el movimiento diario normal vende <b>un tercio</b> y el stop pasa a la entrada: lo que queda ya no puede perder. No compra si Bitcoin está a menos de 5 % sobre su media (mercado indeciso).</li>
           </ul>
           <details class="more"><summary>Cómo le fue en las pruebas (${v.periodo})</summary>
             <table class="table"><tr><th></th><th>Bot</th><th>Comprar BTC</th></tr>
